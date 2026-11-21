@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Garrett Jahnke",
+      "hasCanvas": false,
+      "bodyTextLen": 162,
+      "bodyTextHash": "6e8e5d0725e35bc07684b0f3a4be0d304d30d883354c452f8e97c1304938c071",
+      "bodyTextPrefix": "Garrett Jahnke My KPOP Database Rankings Directory TOP 150 + Add",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Garrett Jahnke",
+      "hasCanvas": false,
+      "bodyTextLen": 162,
+      "bodyTextHash": "6e8e5d0725e35bc07684b0f3a4be0d304d30d883354c452f8e97c1304938c071",
+      "bodyTextPrefix": "Garrett Jahnke My KPOP Database Rankings Directory TOP 150 + Add",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}

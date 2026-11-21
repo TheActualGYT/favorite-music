@@ -1,0 +1,7 @@
+- Favorite music website created and pushed to GitHub repo https://github.com/TheActualGYT/favorite-music [2026-11-21]
+- Updated with modern glassmorphism design, animated purple/lavender gradient, and subtle animations [2026-11-21]
+- Adjusted to grayish base (like original) with purple/lavender as secondary accents [2026-11-21]
+- Added gradient borders on nav and sidebar, updated brand to Garrett Jahnke with circular avatar (avatar.png), and hover dropdowns for Rankings and Directory [2026-11-21]
+- Landing list is TOP SONGS; rows show #rank, cover art, title, artist. Edit, reorder, and delete live on the song page [2026-11-21]
+- Subtitle under name is "My KPOP Database" [2026-11-21]
+- Nav texture is a soft muted grid and faint lavender hatch; gradient line is a seamless looping lavender strip [2026-11-21]
