@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getSpotifyStreams } from "../lib/counts.server";
+import { getSpotifyStreams } from "../lib/spotify";
 
 export const Route = createFileRoute("/")({ component: Home });
 

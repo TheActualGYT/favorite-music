@@ -1,5 +1,3 @@
-import { createServerFn } from "@tanstack/react-start";
-
 type ArtistIndex = { id: string; name: string; key: string };
 
 let artistCache: { at: number; artists: ArtistIndex[] } | null = null;
@@ -33,25 +31,23 @@ function findArtist(artists: ArtistIndex[], name: string) {
   );
 }
 
-export const getSpotifyStreams = createServerFn({ method: "POST" })
-  .inputValidator((data: { artist: string }) => data)
-  .handler(async ({ data }) => {
-    const artists = await artistIndex();
-    const artist = findArtist(artists, data.artist);
-    if (!artist) return { songs: {} as Record<string, number> };
-    const cached = songCache.get(artist.id);
-    if (cached && Date.now() - cached.at < DAY) return { songs: cached.songs };
-    const res = await fetch(`https://kworb.net/spotify/artist/${artist.id}_songs.html`, {
-      headers: { "user-agent": "GarrettKpopDatabase/1.0" },
-    });
-    if (!res.ok) return { songs: cached?.songs ?? {} };
-    const html = await res.text();
-    const songs: Record<string, number> = {};
-    for (const match of html.matchAll(
-      /<tr><td class="text"><div>(?:\* )?[^<]*<a [^>]*>([^<]+)<\/a><\/div><\/td><td>([\d,]+)<\/td>/g,
-    )) {
-      songs[norm(match[1])] = Number(match[2].replace(/,/g, ""));
-    }
-    songCache.set(artist.id, { at: Date.now(), songs });
-    return { songs };
+export async function fetchSpotifyStreams(artistName: string) {
+  const artists = await artistIndex();
+  const artist = findArtist(artists, artistName);
+  if (!artist) return { songs: {} as Record<string, number> };
+  const cached = songCache.get(artist.id);
+  if (cached && Date.now() - cached.at < DAY) return { songs: cached.songs };
+  const res = await fetch(`https://kworb.net/spotify/artist/${artist.id}_songs.html`, {
+    headers: { "user-agent": "GarrettKpopDatabase/1.0" },
   });
+  if (!res.ok) return { songs: cached?.songs ?? {} };
+  const html = await res.text();
+  const songs: Record<string, number> = {};
+  for (const match of html.matchAll(
+    /<tr><td class="text"><div>(?:\* )?[^<]*<a [^>]*>([^<]+)<\/a><\/div><\/td><td>([\d,]+)<\/td>/g,
+  )) {
+    songs[norm(match[1])] = Number(match[2].replace(/,/g, ""));
+  }
+  songCache.set(artist.id, { at: Date.now(), songs });
+  return { songs };
+}
