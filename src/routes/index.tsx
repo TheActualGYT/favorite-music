@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getSpotifyStreams } from "../lib/counts.server";
 
 export const Route = createFileRoute("/")({ component: Home });
 
@@ -13,6 +14,10 @@ type Song = {
   notes: string;
   coverUrl?: string;
   videoId?: string;
+  spotifyStreams?: number;
+  spotifyAt?: number;
+  youtubeViews?: number;
+  youtubeAt?: number;
 };
 
 type View =
@@ -25,6 +30,7 @@ type View =
 
 const STORAGE_KEY = "favoriteSongs";
 const YOUTUBE_KEY = "AIzaSyDHKgMCN9N1tuTX42EwAzx2phuS4hisW9k";
+const COUNT_STALE = 12 * 60 * 60 * 1000;
 
 const MENUS = [
   {
@@ -63,6 +69,10 @@ function loadSongs(): Song[] {
       notes: song.notes ?? "",
       coverUrl: song.coverUrl,
       videoId: song.videoId,
+      spotifyStreams: song.spotifyStreams,
+      spotifyAt: song.spotifyAt,
+      youtubeViews: song.youtubeViews,
+      youtubeAt: song.youtubeAt,
     }));
   } catch {
     return [];
@@ -168,6 +178,13 @@ async function fetchVideo(title: string, artist: string): Promise<string | null>
   }
 }
 
+function formatCount(value: number) {
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return String(value);
+}
+
 function formatDate(value: string) {
   if (!value) return "";
   const date = new Date(`${value}T00:00:00`);
@@ -186,6 +203,7 @@ function Home() {
   const [editing, setEditing] = useState(false);
   const closeTimer = useRef<number | null>(null);
   const coverTried = useRef(new Set<number>());
+  const countsTried = useRef(new Set<string>());
 
   useEffect(() => {
     setSongs(loadSongs());
@@ -219,6 +237,77 @@ function Home() {
       if (cancelled || found.size === 0) return;
       setSongs((prev) => {
         const next = prev.map((song) => (found.has(song.id) ? { ...song, ...found.get(song.id) } : song));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [songs]);
+
+  useEffect(() => {
+    const now = Date.now();
+    const staleYouTube = songs.filter(
+      (song) => song.videoId && (!song.youtubeAt || now - song.youtubeAt > COUNT_STALE),
+    );
+    const staleArtists = [
+      ...new Set(
+        songs
+          .filter((song) => !song.spotifyAt || now - song.spotifyAt > COUNT_STALE)
+          .map((song) => song.artist),
+      ),
+    ].filter((artist) => !countsTried.current.has(artist));
+    if (staleYouTube.length === 0 && staleArtists.length === 0) return;
+    staleArtists.forEach((artist) => countsTried.current.add(artist));
+    let cancelled = false;
+    (async () => {
+      const youtube = new Map<string, number>();
+      if (staleYouTube.length > 0) {
+        const ids = [...new Set(staleYouTube.map((song) => song.videoId).filter(Boolean))].slice(0, 50);
+        try {
+          const res = await fetch(
+            `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${ids.join(",")}&key=${YOUTUBE_KEY}`,
+          );
+          if (res.ok) {
+            const data = (await res.json()) as {
+              items?: { id?: string; statistics?: { viewCount?: string } }[];
+            };
+            for (const item of data.items ?? []) {
+              if (item.id && item.statistics?.viewCount) youtube.set(item.id, Number(item.statistics.viewCount));
+            }
+          }
+        } catch {
+          // keep the last cached count
+        }
+      }
+      const spotify = new Map<string, Record<string, number>>();
+      for (const artist of staleArtists) {
+        try {
+          const result = await getSpotifyStreams({ data: { artist } });
+          spotify.set(artist, result.songs);
+        } catch {
+          spotify.set(artist, {});
+        }
+      }
+      if (cancelled) return;
+      setSongs((prev) => {
+        const next = prev.map((song) => {
+          const patch: Partial<Song> = {};
+          if (song.videoId && youtube.has(song.videoId)) {
+            patch.youtubeViews = youtube.get(song.videoId);
+            patch.youtubeAt = now;
+          } else if (song.videoId && staleYouTube.some((item) => item.id === song.id)) {
+            patch.youtubeAt = now;
+          }
+          if (spotify.has(song.artist)) {
+            const key = song.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+            const streams = spotify.get(song.artist)?.[key];
+            if (streams) patch.spotifyStreams = streams;
+            patch.spotifyAt = now;
+          }
+          return Object.keys(patch).length ? { ...song, ...patch } : song;
+        });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
         return next;
       });
@@ -569,6 +658,20 @@ function Home() {
                   </div>
                 ) : null}
               </div>
+              <div className="counts">
+                {selected.spotifyStreams ? (
+                  <div className="count">
+                    <span>Spotify</span>
+                    <strong>{formatCount(selected.spotifyStreams)}</strong>
+                  </div>
+                ) : null}
+                {selected.videoId && selected.youtubeViews ? (
+                  <div className="count">
+                    <span>YouTube</span>
+                    <strong>{formatCount(selected.youtubeViews)}</strong>
+                  </div>
+                ) : null}
+              </div>
               {selected.videoId ? (
                 <div className="video">
                   <iframe
@@ -579,12 +682,23 @@ function Home() {
                   />
                 </div>
               ) : null}
-              {selected.notes ? (
-                <div className="notes">
-                  <h3>Notes</h3>
-                  <p>{selected.notes}</p>
+              <section className="thoughts">
+                <div className="thoughts-head">
+                  <img className="thoughts-avatar" src="/avatar.png" alt="Garrett Jahnke" />
+                  <span className="bulb" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="18" height="18">
+                      <path
+                        fill="currentColor"
+                        d="M9 21h6v-1H9v1zm3-19a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2zm2.2 11.2-.2.1V15h-4v-1.7l-.2-.1A5 5 0 1 1 14.2 13.2z"
+                      />
+                    </svg>
+                  </span>
+                  <span>My Thoughts</span>
                 </div>
-              ) : null}
+                <div className="thoughts-box">
+                  {selected.notes || "Nothing here yet. Add it from Edit."}
+                </div>
+              </section>
             </article>
             )
           ) : groupName && showingArtists ? (
@@ -737,7 +851,7 @@ function SongForm({
         </select>
       </div>
       <div className="field">
-        <label htmlFor="edit-notes">Notes</label>
+        <label htmlFor="edit-notes">My Thoughts</label>
         <textarea id="edit-notes" name="notes" defaultValue={song.notes} />
       </div>
       <div className="field">
