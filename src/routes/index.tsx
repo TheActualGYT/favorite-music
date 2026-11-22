@@ -1687,8 +1687,8 @@ function Home() {
         </nav>
       </header>
       <div className="seam" aria-hidden="true">
-        <div className="seam-h"><i /></div>
-        <div className="seam-v"><i /></div>
+        <i className="seam-stroke" />
+        <i className="seam-fill" />
       </div>
 
       <div className="workspace">

@@ -59,7 +59,7 @@
   animation: wash 22s ease infinite;
 }
 
-.app-shell > * {
+.app-shell > *:not(.seam) {
   position: relative;
   z-index: 1;
 }
@@ -67,8 +67,7 @@
 .app-shell.is-scrolling::before,
 .app-shell.is-scrolling .nav,
 .app-shell.is-scrolling .sidebar,
-.app-shell.is-scrolling .seam-h > i,
-.app-shell.is-scrolling .seam-v > i {
+.app-shell.is-scrolling .seam-fill {
   animation-play-state: paused;
 }
 
@@ -89,7 +88,8 @@
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
+  gap: 0.45rem;
+  margin-left: -0.45rem;
   min-width: 0;
   color: var(--color-fg);
 }
@@ -194,56 +194,56 @@
   pointer-events: none;
 }
 
-.seam-h,
-.seam-v {
+.seam-stroke,
+.seam-fill {
   position: absolute;
-  overflow: hidden;
-  background: #fff;
-  box-sizing: border-box;
-}
-
-.seam-h {
-  top: var(--nav-h);
-  left: 0;
-  right: 0;
-  height: var(--seam);
-  padding: 1px 0;
-}
-
-.seam-v {
-  top: calc(var(--nav-h) + var(--seam) - 1px);
-  left: calc(var(--side-w) - var(--seam));
-  width: var(--seam);
-  bottom: 0;
-  padding: 0 1px;
-}
-
-.seam-h > i,
-.seam-v > i {
-  position: absolute;
-  inset: 1px;
+  inset: 0;
   display: block;
-  background-image: linear-gradient(
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.seam-stroke {
+  --t: var(--seam);
+  --top: var(--nav-h);
+  --left: calc(var(--side-w) - var(--seam));
+  background: #fff;
+  -webkit-mask-image: linear-gradient(#fff, #fff), linear-gradient(#fff, #fff);
+  mask-image: linear-gradient(#fff, #fff), linear-gradient(#fff, #fff);
+  -webkit-mask-size: 100% var(--t), var(--t) 100%;
+  mask-size: 100% var(--t), var(--t) 100%;
+  -webkit-mask-position: 0 var(--top), var(--left) var(--top);
+  mask-position: 0 var(--top), var(--left) var(--top);
+}
+
+.seam-fill {
+  --t: calc(var(--seam) - 2px);
+  --top: calc(var(--nav-h) + 1px);
+  --left: calc(var(--side-w) - var(--seam) + 1px);
+  background-image: repeating-linear-gradient(
     115deg,
-    #ffffff 0%,
-    #f8d0ea 12%,
-    #e4d4fe 26%,
-    #b794f6 40%,
-    #7c3aed 50%,
-    #b794f6 60%,
-    #e4d4fe 74%,
-    #f8d0ea 88%,
-    #ffffff 100%
+    #ffffff 0px,
+    #f7c6e3 180px,
+    #e7d6ff 360px,
+    #c4b5fd 540px,
+    #8b5cf6 720px,
+    #c4b5fd 900px,
+    #e7d6ff 1080px,
+    #f7c6e3 1260px,
+    #ffffff 1440px
   );
-  background-size: 180vw 180vw;
-  background-attachment: fixed;
-  background-repeat: repeat;
-  animation: seam-flow 22s linear infinite;
+  animation: seam-flow 16s linear infinite;
+  -webkit-mask-image: linear-gradient(#fff, #fff), linear-gradient(#fff, #fff);
+  mask-image: linear-gradient(#fff, #fff), linear-gradient(#fff, #fff);
+  -webkit-mask-size: 100% var(--t), var(--t) 100%;
+  mask-size: 100% var(--t), var(--t) 100%;
+  -webkit-mask-position: 0 var(--top), var(--left) var(--top);
+  mask-position: 0 var(--top), var(--left) var(--top);
 }
 
 @keyframes seam-flow {
   from { background-position: 0 0; }
-  to { background-position: -180vw -180vw; }
+  to { background-position: 1305.083px 608.57px; }
 }
 
 .workspace {
@@ -974,9 +974,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .edge-fill,
-  .seam-grad,
-  .seam-h > i,
-  .seam-v > i,
+  .seam-fill,
   .app-shell::before,
   .detail,
   .sidebar,
@@ -1007,8 +1005,10 @@
     display: none;
   }
 
-  .seam-v {
-    display: none;
+  .seam-stroke,
+  .seam-fill {
+    -webkit-mask-size: 100% var(--t), 0 0;
+    mask-size: 100% var(--t), 0 0;
   }
 
   .main {
