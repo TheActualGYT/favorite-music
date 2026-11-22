@@ -528,6 +528,52 @@ function cleanLyric(value?: string) {
   return text.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/\s+/g, " ").trim();
 }
 
+const PASTE_COLORS = ["#ff3b30", "#ff8a1e", "#f5d000", "#3dcc6a", "#00ffff", "#3aa8e6", "#a855f7", "#ff4d9a"];
+
+function parsePastedLyrics(raw: string, artist: string) {
+  const lines: { who: string; color: string; korean: string; english: string }[] = [];
+  const members = new Map<string, { name: string; color: string; lines: number; words: number }>();
+  let colorAt = 0;
+  const colorFor = (name: string) => {
+    const existing = members.get(name);
+    if (existing) return existing.color;
+    const preset = MEMBER_COLORS[name.toLowerCase().replace(/[^a-z0-9]/g, "")];
+    if (preset) return preset;
+    const next = PASTE_COLORS[colorAt % PASTE_COLORS.length];
+    colorAt += 1;
+    return next;
+  };
+  for (const row of raw.split(/\r?\n/)) {
+    const match = row.trim().match(/^\[([^\]]+)\]\s*(.*)$/);
+    if (!match) continue;
+    const label = match[1].replace(/[,:;]+$/g, "").trim().toUpperCase();
+    const body = cleanLyric(match[2]);
+    if (!label || !body) continue;
+    const parts = label === "ALL" ? ["ALL"] : label.split(/\s*(?:&|and)\s*/i).map((part) => part.replace(/[,:;]+$/g, "").trim()).filter(Boolean);
+    const who = parts.length > 1 ? parts.join(" & ") : parts[0];
+    const color = colorFor(parts[0]);
+    lines.push({ who, color, korean: body, english: body });
+    for (const name of parts) {
+      if (name === "ALL") continue;
+      const current = members.get(name);
+      const words = body.split(/\s+/).filter(Boolean).length;
+      if (current) {
+        current.lines += 1;
+        current.words += words;
+      } else {
+        members.set(name, { name, color: colorFor(name), lines: 1, words });
+      }
+    }
+  }
+  if (lines.length < 2) return null;
+  return {
+    v: 11,
+    source: "pasted",
+    lines,
+    members: [...members.values()].sort((a, b) => b.lines - a.lines || b.words - a.words),
+  };
+}
+
 const PHOTO_CACHE = new Map<string, string>();
 
 function SoftPhoto({ src, className, style }: { src: string; className?: string; style?: CSSProperties }) {
@@ -580,12 +626,14 @@ function LyricsBlock({
   onReset,
   onTranslated,
   onLoad,
+  onPaste,
 }: {
   text?: string;
   artist?: string;
   onReset: () => void;
   onTranslated?: (lines: string[]) => void;
   onLoad: (url: string) => Promise<boolean>;
+  onPaste?: (raw: string) => boolean;
 }) {
   const [english, setEnglish] = useState(false);
   const [crops, setCrops] = useState<Record<string, Crop>>({});
@@ -595,6 +643,8 @@ function LyricsBlock({
   const [sourceUrl, setSourceUrl] = useState("");
   const [sourceError, setSourceError] = useState("");
   const [sourceBusy, setSourceBusy] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [pasteError, setPasteError] = useState("");
   useEffect(() => setCrops(loadStore(CROP_KEY)), [text]);
   useEffect(() => setIdolPhotos(loadIdolPhotos()), [text]);
   useEffect(() => {
@@ -685,6 +735,33 @@ function LyricsBlock({
       setSourceBusy(false);
     }
   };
+  const submitPaste = (event: FormEvent) => {
+    event.preventDefault();
+    const raw = pasteText.trim();
+    if (!raw) return;
+    setPasteError("");
+    if (!onPaste?.(raw)) {
+      setPasteError("Paste lines like [KARINA] I go in all the way, one per line.");
+      return;
+    }
+    setPasteText("");
+  };
+  const pasteForm = (
+    <form className="lyric-paste" onSubmit={submitPaste}>
+      <p className="lyrics-note">
+        Or paste the correct version, one line per person: <code>[KARINA] I go in all the way</code>
+      </p>
+      <textarea
+        value={pasteText}
+        onChange={(event) => setPasteText(event.target.value)}
+        placeholder={"[KARINA] Woo\n[NINGNING] I go in all the way\n[ALL] I'll make it lemonade"}
+        rows={6}
+        spellCheck={false}
+      />
+      <button type="submit" disabled={!pasteText.trim()}>Use pasted lyrics</button>
+      {pasteError ? <p className="lyrics-note is-error">{pasteError}</p> : null}
+    </form>
+  );
   const sourceForm = (
     <form className="lyric-source" onSubmit={loadSource}>
       <p className="lyrics-note">
@@ -708,6 +785,7 @@ function LyricsBlock({
       <>
         <div className="lyrics-head">Lyrics</div>
         {sourceForm}
+        {pasteForm}
       </>
     );
   }
@@ -753,6 +831,7 @@ function LyricsBlock({
                 <button type="submit" disabled={sourceBusy || !sourceUrl.trim()}>{sourceBusy ? "…" : "Use page"}</button>
               </form>
               {sourceError ? <p className="lyrics-note is-error">{sourceError}</p> : null}
+              {pasteForm}
             </div>
           </div>
         </div>
@@ -2155,6 +2234,19 @@ function Home() {
                     setSongs((prev) => {
                       const next = prev.map((item) =>
                         item.id === selected.id ? { ...item, geniusUrl: result.source, lyrics: JSON.stringify(result) } : item,
+                      );
+                      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+                      return next;
+                    });
+                    flushLibrarySave();
+                    return true;
+                  }}
+                  onPaste={(raw) => {
+                    const result = parsePastedLyrics(raw, selected.artist);
+                    if (!result) return false;
+                    setSongs((prev) => {
+                      const next = prev.map((item) =>
+                        item.id === selected.id ? { ...item, geniusUrl: undefined, lyrics: JSON.stringify(result) } : item,
                       );
                       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
                       return next;

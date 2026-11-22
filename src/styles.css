@@ -1322,6 +1322,23 @@
 .lyrics-note a { color: #d6ccff; }
 .lyrics-note.is-error { color: #e7b4b4; }
 .lyric-source { display: grid; gap: 0.55rem; margin-top: 0.45rem; }
+.lyric-paste { display: grid; gap: 0.45rem; margin-top: 0.7rem; }
+.lyric-paste textarea {
+  width: 100%;
+  min-height: 7rem;
+  padding: 0.55rem 0.7rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: #1a1a1a;
+  color: #eee;
+  font: inherit;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+.lyric-paste button,
+.lyric-source button {
+  justify-self: start;
+}
 .lyric-source-row { display: flex; gap: 0.45rem; }
 .lyric-source input,
 .lyrics-replace input {
