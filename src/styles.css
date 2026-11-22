@@ -367,6 +367,7 @@
 
 .row > .hero-clip .clip-slot iframe,
 .row > .hero-clip .clip-cover img {
+  position: absolute;
   top: 50%;
   left: 50%;
   right: auto;
@@ -375,6 +376,7 @@
   max-width: none;
   aspect-ratio: auto;
   object-fit: cover;
+  object-position: center;
   transform: translate(-50%, -50%);
   transform-origin: center;
 }
