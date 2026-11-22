@@ -115,15 +115,19 @@ let libraryHooked = false;
 function queueLibrarySave() {
   if (libraryPause || typeof window === "undefined") return;
   window.clearTimeout(libraryTimer);
-  libraryTimer = window.setTimeout(() => {
-    const data = snapshotLibrary();
-    if (!libraryHasEntries(data) && !Array.isArray(data[STORAGE_KEY])) return;
-    void fetch(libraryEndpoint(), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ data }),
-    }).catch(() => {});
-  }, 400);
+  libraryTimer = window.setTimeout(flushLibrarySave, 400);
+}
+
+function flushLibrarySave() {
+  if (libraryPause || typeof window === "undefined") return;
+  window.clearTimeout(libraryTimer);
+  const data = snapshotLibrary();
+  if (!libraryHasEntries(data) && !Array.isArray(data[STORAGE_KEY])) return;
+  void fetch(libraryEndpoint(), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ data }),
+  }).catch(() => {});
 }
 
 function hookLibrary() {
@@ -160,7 +164,11 @@ function loadSongs(): Song[] {
       clipUrl: song.clipUrl,
       company: isPersonCompany(song.company) ? undefined : song.company?.replace(/\s*\([^)]*\)/g, "").trim() || undefined,
       subLabel: undefined,
-      lyrics: song.lyrics && /"v":11/.test(song.lyrics) ? song.lyrics : undefined,
+      lyrics: typeof song.lyrics === "string" && /"v":\s*11/.test(song.lyrics)
+        ? song.lyrics
+        : song.lyrics && typeof song.lyrics === "object"
+          ? JSON.stringify(song.lyrics)
+          : undefined,
       geniusUrl: song.geniusUrl,
       spotifyStreams: song.spotifyStreams,
       spotifyAt: song.spotifyAt,
@@ -770,7 +778,17 @@ function LyricsBlock({
             {(() => {
               const roster = parsed.members ?? [];
               const group = roster.find((member) => member.name.replace(/[,:;]+$/g, "").trim() === "ALL");
-              return roster.filter((member) => member.name.replace(/[,:;]+$/g, "").trim() !== "ALL").map((member) => {
+              const people = new Map<string, (typeof roster)[number]>();
+              for (const member of roster) {
+                const parts = member.name.split(/\s*(?:&|and)\s*/i).map((name) => name.replace(/[,:;]+$/g, "").trim()).filter((name) => name && name !== "ALL");
+                for (const name of parts) {
+                  const current = people.get(name);
+                  people.set(name, current
+                    ? { ...current, lines: current.lines + member.lines, words: (current.words ?? 0) + (member.words ?? 0) }
+                    : { ...member, name });
+                }
+              }
+              return [...people.values()].map((member) => {
               const shown = member.name.replace(/[,:;]+$/g, "").trim();
               const color = memberColor(artist, shown, member.color);
               const saved = crops[cropId(artist, member.name)] ?? crops[cropId(artist, shown)];
@@ -1375,14 +1393,29 @@ function Home() {
           return;
         }
         if (libraryHasEntries(remote)) {
+          const remoteSongs = Array.isArray(remote[STORAGE_KEY]) ? remote[STORAGE_KEY] as Song[] : [];
+          const localSongs = loadSongs();
+          const byId = new Map(remoteSongs.map((song) => [song.id, song]));
+          const seen = new Set<number>();
+          const merged = localSongs.map((song) => {
+            seen.add(song.id);
+            const other = byId.get(song.id);
+            if (!other) return song;
+            return { ...other, ...song, lyrics: song.lyrics || other.lyrics, notes: song.notes || other.notes, geniusUrl: song.geniusUrl || other.geniusUrl };
+          });
+          for (const song of remoteSongs) {
+            if (!seen.has(song.id)) merged.push(song);
+          }
           libraryPause = true;
+          if (merged.length) localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
           for (const key of LIBRARY_KEYS) {
-            if (remote[key] === undefined) continue;
+            if (key === STORAGE_KEY || remote[key] === undefined || localStorage.getItem(key)) continue;
             localStorage.setItem(key, JSON.stringify(remote[key]));
           }
           libraryPause = false;
           setSongs(loadSongs());
           window.dispatchEvent(new Event("gyt-roster"));
+          if (merged.length) flushLibrarySave();
           return;
         }
         setSongs(loadSongs());
@@ -2126,6 +2159,7 @@ function Home() {
                       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
                       return next;
                     });
+                    flushLibrarySave();
                     return true;
                   }}
                   onReset={() => {
@@ -2134,6 +2168,7 @@ function Home() {
                       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
                       return next;
                     });
+                    flushLibrarySave();
                   }}
                   onTranslated={(english) => {
                     setSongs((prev) => {
@@ -2146,6 +2181,7 @@ function Home() {
                       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
                       return next;
                     });
+                    flushLibrarySave();
                   }}
                 />
               </section>

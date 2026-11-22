@@ -389,12 +389,14 @@ function headerRoles(raw: string): GeniusRoles {
   const after = raw.split(":").slice(1).join(":");
   if (!after.trim()) return roles;
   for (const part of after.split(",")) {
-    const name = cleanName(decode(part.replace(/<[^>]+>/g, "").replace(/\*/g, "")));
-    if (!name || name.length > 24 || /^(VERSE|CHORUS|PRE CHORUS|POST CHORUS|BRIDGE|OUTRO|INTRO|HOOK|REFRAIN|BREAK|INTERLUDE)$/.test(name)) continue;
-    const hasBold = /<b>|\*\*/i.test(part);
-    const hasItalic = /<i>|(^|[^*])\*(?!\*)/i.test(part);
-    const bucket: GeniusStyle = hasBold && hasItalic ? "both" : hasBold ? "bold" : hasItalic ? "italic" : "plain";
-    if (!roles[bucket].includes(name)) roles[bucket].push(name);
+    const names = cleanName(decode(part.replace(/<[^>]+>/g, "").replace(/\*/g, ""))).split(/\s*(?:&|and)\s*/i);
+    for (const name of names) {
+      if (!name || name.length > 24 || /^(VERSE|CHORUS|PRE CHORUS|POST CHORUS|BRIDGE|OUTRO|INTRO|HOOK|REFRAIN|BREAK|INTERLUDE|AND)$/.test(name)) continue;
+      const hasBold = /<b>|\*\*/i.test(part);
+      const hasItalic = /<i>|(^|[^*])\*(?!\*)/i.test(part);
+      const bucket: GeniusStyle = hasBold && hasItalic ? "both" : hasBold ? "bold" : hasItalic ? "italic" : "plain";
+      if (!roles[bucket].includes(name)) roles[bucket].push(name);
+    }
   }
   return roles;
 }
@@ -513,9 +515,11 @@ function shareGroupLines(result: LyricsResult): LyricsResult {
   if (!result) return result;
   const names: string[] = [];
   const remember = (name: string) => {
-    const clean = name.replace(/[,:;]+$/g, "").trim();
-    if (!clean || clean === ALL.name || names.includes(clean)) return;
-    names.push(clean);
+    for (const part of name.split(/\s*(?:&|and)\s*/i)) {
+      const clean = part.replace(/[,:;]+$/g, "").trim();
+      if (!clean || clean === ALL.name || names.includes(clean)) continue;
+      names.push(clean);
+    }
   };
   for (const member of result.members) remember(member.name);
   for (const line of result.lines) {
@@ -536,7 +540,7 @@ function shareGroupLines(result: LyricsResult): LyricsResult {
     });
   }
   for (const line of result.lines) {
-    const credited = line.who === ALL.name ? names : line.who.split(/\s+&\s+/);
+    const credited = line.who === ALL.name ? names : line.who.split(/\s*(?:&|and)\s*/i).map((name) => name.trim()).filter((name) => name && name !== ALL.name);
     for (const name of credited) {
       const current = totals.get(name);
       if (!current) continue;
