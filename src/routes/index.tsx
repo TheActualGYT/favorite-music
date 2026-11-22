@@ -150,7 +150,7 @@ function loadSongs(): Song[] {
       artist: song.artist,
       album: song.album ?? "",
       releaseDate: song.releaseDate || song.year || "",
-      rating: song.rating ?? 5,
+      rating: typeof song.rating === "number" && song.rating > 0 ? song.rating : 0,
       notes: song.notes ?? "",
       coverUrl: song.coverUrl,
       coverManual: song.coverManual,
@@ -175,8 +175,22 @@ function loadSongs(): Song[] {
   }
 }
 
+function averageRating(items: Song[]) {
+  const rated = items.filter((song) => song.rating > 0);
+  if (!rated.length) return 0;
+  return rated.reduce((sum, song) => sum + song.rating, 0) / rated.length;
+}
+
+function ratingFrom(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "");
+  if (!raw || raw === "none") return 0;
+  const rating = Number(raw);
+  return Number.isFinite(rating) && rating > 0 ? rating : 0;
+}
+
 function Stars({ rating, className }: { rating: number; className?: string }) {
   const n = Math.max(0, Math.min(5, Math.round((rating || 0) * 2) / 2));
+  if (n <= 0) return null;
   const count = Math.ceil(n);
   return (
     <span className={className ? `star-row ${className}` : "star-row"} aria-label={`${n} out of 5`}>
@@ -1623,7 +1637,7 @@ function Home() {
     const rows = [...map.entries()].map(([name, items]) => ({
       name,
       count: items.length,
-      rating: items.reduce((sum, s) => sum + s.rating, 0) / items.length,
+      rating: averageRating(items),
       items,
     }));
     if (view === "top-artists") {
@@ -1646,7 +1660,7 @@ function Home() {
     const rows = [...map.entries()].map(([name, items]) => ({
       name,
       count: items.length,
-      rating: items.reduce((sum, s) => sum + s.rating, 0) / items.length,
+      rating: averageRating(items),
       artist: items[0]?.artist ?? "",
       items,
     }));
@@ -1865,8 +1879,12 @@ function Home() {
                     </div>
                     {selected ? null : (
                       <div className="row-rating">
-                        <span className="row-sub">RATING</span>
-                        <Stars rating={song.rating} className="row-stars" />
+                        {song.rating > 0 ? (
+                          <>
+                            <span className="row-sub">RATING</span>
+                            <Stars rating={song.rating} className="row-stars" />
+                          </>
+                        ) : null}
                       </div>
                     )}
                   </div>
@@ -1966,7 +1984,7 @@ function Home() {
                   <div className="detail-rank">#{songs.findIndex((song) => song.id === selected.id) + 1}</div>
                   <h1>{selected.title}</h1>
                   <p className="byline">{selected.artist}</p>
-                  <Stars rating={selected.rating} className="detail-stars" />
+                  {selected.rating > 0 ? <Stars rating={selected.rating} className="detail-stars" /> : null}
                 </div>
                 <button type="button" className="edit-btn" onClick={() => setEditing(true)}>
                   Edit
@@ -2195,7 +2213,7 @@ function GroupDetail({
                 {song.album ? ` · ${song.album}` : ""}
               </div>
             </div>
-            <Stars rating={song.rating} />
+            {song.rating > 0 ? <Stars rating={song.rating} /> : null}
           </button>
         ))}
       </div>
@@ -2255,7 +2273,7 @@ function SongForm({
         artist,
         album: String(form.get("album") ?? "").trim(),
         releaseDate: String(form.get("releaseDate") ?? "").trim(),
-        rating: Number(form.get("rating") ?? song.rating),
+        rating: ratingFrom(form.get("rating")),
         notes: String(form.get("notes") ?? "").trim(),
         coverUrl,
         coverManual: Boolean(coverUrl && coverUrl !== song.coverUrl) || song.coverManual,
@@ -2301,7 +2319,8 @@ function SongForm({
       </div>
       <div className="field">
         <label htmlFor="edit-rating">Rating</label>
-        <select id="edit-rating" name="rating" defaultValue={String(song.rating)}>
+        <select id="edit-rating" name="rating" defaultValue={song.rating > 0 ? String(song.rating) : "none"}>
+          <option value="none">No rating</option>
           <option value="5">★★★★★ (5)</option>
           <option value="4.5">★★★★½ (4.5)</option>
           <option value="4">★★★★☆ (4)</option>
@@ -2388,7 +2407,7 @@ function AddModal({
         artist,
         album: track?.album ?? "",
         releaseDate: track?.releaseDate ?? "",
-        rating: String(form.get("rating") ?? "") === "" ? 0 : Number(form.get("rating")),
+        rating: ratingFrom(form.get("rating")),
         notes: String(form.get("notes") ?? "").trim(),
         coverUrl: track?.coverUrl,
         videoId: videoId ?? undefined,
@@ -2421,8 +2440,8 @@ function AddModal({
         </div>
         <div className="field">
           <label htmlFor="rating">Rating</label>
-          <select id="rating" name="rating" defaultValue="">
-            <option value="">No rating</option>
+          <select id="rating" name="rating" defaultValue="none">
+            <option value="none">No rating</option>
             <option value="5">★★★★★ (5)</option>
             <option value="4.5">★★★★½ (4.5)</option>
             <option value="4">★★★★☆ (4)</option>
