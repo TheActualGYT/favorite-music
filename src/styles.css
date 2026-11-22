@@ -36,7 +36,7 @@
 
 .app-shell {
   --nav-h: 62px;
-  --side-w: 22.5rem;
+  --side-w: 33%;
   --seam: 7px;
   position: relative;
   display: flex;
@@ -368,15 +368,6 @@
   box-shadow: inset 3px 0 0 #fff;
 }
 
-.row.is-selected > .hero-clip {
-  width: 54%;
-}
-
-.row.is-selected > .hero-clip .clip-slot iframe {
-  width: 240%;
-  height: 240%;
-}
-
 .rank {
   display: flex;
   width: 2.7rem;
@@ -582,9 +573,6 @@
   padding: 1.15rem;
   border: 1px solid #2f2f2f;
   border-radius: 1.1rem;
-  background:
-    linear-gradient(135deg, rgba(167, 139, 250, 0.12), transparent 42%),
-    #202020;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
 }
 
@@ -1064,9 +1052,6 @@
   overflow: hidden;
   margin-bottom: 1.6rem;
   border: 1.5px solid rgba(255, 255, 255, 0.5);
-  background:
-    linear-gradient(135deg, rgba(167, 139, 250, 0.12), transparent 42%),
-    #202020;
 }
 .detail-hero:hover { transform: none; }
 
@@ -1126,13 +1111,6 @@
   border: 0;
   pointer-events: none;
   transform: translate(-50%, -50%);
-}
-.app-shell.is-scrolling .clip-slot {
-  visibility: hidden;
-}
-.app-shell.is-scrolling .clip-cover {
-  opacity: 1 !important;
-  transition: none;
 }
 
 .detail-hero .edit-btn,
@@ -1357,6 +1335,7 @@
 .member-role-row { display: flex; align-items: center; justify-content: space-between; gap: 0.45rem; }
 .member-roles { margin-top: 0; color: #ddd !important; font-size: 0.68rem !important; letter-spacing: 0.03em; text-transform: uppercase; }
 .bias-mark { align-self: center; margin-top: 0; color: #ffe08a !important; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em; white-space: nowrap; }
+.member-card-body .bias-mark span { color: #fff !important; font-size: 0.85rem; line-height: 1; }
 .color-field input { width: 2.4rem; height: 1.6rem; padding: 0; border: 0; background: transparent; }
 .crop-title { display: flex; align-items: center; gap: 0.4rem; }
 .bias-star { border: 0; padding: 0; background: transparent; color: #6a6a6a; font-size: 1.25rem; line-height: 1; cursor: pointer; }
