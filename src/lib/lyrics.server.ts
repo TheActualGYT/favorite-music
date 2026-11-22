@@ -251,7 +251,7 @@ function lineParts(part: string) {
 }
 
 function sectionLines(section: string) {
-  const lines: { color?: string; text: string }[] = [];
+  const lines: { color?: string; text: string; shared?: string[] }[] = [];
   for (const block of section.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)) {
     for (const part of block[1].split(/<br\s*\/?>/i)) {
       const segments = lineParts(part);
@@ -260,7 +260,9 @@ function sectionLines(section: string) {
       const lead = [...(body.length ? body : segments)].sort((a, b) => b.text.length - a.text.length)[0];
       const text = segments.map((segment) => segment.text).join(" ").replace(/\s+/g, " ").trim();
       if (!text || /^(hangul|romanization|translation|korean)$/i.test(text) || /^['".,!?…\-–—]+$/.test(text)) continue;
-      lines.push({ color: lead?.color, text });
+      const shared = [...part.matchAll(/\[\s*<span[^>]*color:\s*(#[0-9a-fA-F]{3,8})[^>]*>[^<]*<\/span>\s*\/\s*<span[^>]*color:\s*(#[0-9a-fA-F]{3,8})[^>]*>[^<]*<\/span>\s*\]/gi)]
+        .flatMap((match) => [match[1], match[2]].map((color) => color.toLowerCase()));
+      lines.push({ color: lead?.color, text, shared: shared.length >= 2 ? [...new Set(shared)] : undefined });
     }
   }
   return lines;
@@ -634,12 +636,19 @@ export async function fetchLyricsFromGenius(url: string, artist: string, title: 
   }
   if (!spoken.length) return loadGenius("", useArtist, useTitle);
   const colorToName = new Map(legendMembers.map((member) => [member.color, member.name]));
-  const lines: LyricLine[] = spoken.map((line) => ({
-    who: colorToName.get(line.color ?? "") ?? ALL.name,
-    color: line.color ?? ALL.color,
-    korean: line.text,
-    english: line.text,
-  }));
+  const lines: LyricLine[] = spoken.map((line) => {
+    const sharedNames = (line.shared ?? []).map((color) => colorToName.get(color)).filter((name): name is string => Boolean(name));
+    if (sharedNames.length >= 2) {
+      const clean = line.text.replace(/^\[\s*[^\]]+\]\s*/, "").trim();
+      return { who: sharedNames.join(" & "), color: line.color ?? ALL.color, korean: clean || line.text, english: clean || line.text };
+    }
+    return {
+      who: colorToName.get(line.color ?? "") ?? ALL.name,
+      color: line.color ?? ALL.color,
+      korean: line.text,
+      english: line.text,
+    };
+  });
   const translated = pairEnglish(lines.map((line) => line.korean), translatedLines);
   const english = translated && translated.every((line, index) => !/[가-힣]/.test(lines[index].korean) || line !== lines[index].korean)
     ? translated

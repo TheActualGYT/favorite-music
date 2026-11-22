@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { getSpotifyStreams } from "../lib/spotify";
-import { getLyrics, englishFromSource } from "../lib/lyrics";
+import { getLyrics, englishFromSource, findLyrics } from "../lib/lyrics";
 import { getCompany } from "../lib/company";
 import { getGroup, getIdolPhoto } from "../lib/group";
 
@@ -1457,6 +1457,7 @@ function Home() {
   const coverFix = useRef(false);
   const countsTried = useRef(new Set<string>());
   const companyTried = useRef(new Set<number>());
+  const lyricsTried = useRef(new Set<number>());
   const [fact, setFact] = useState<{ field: "album" | "releaseDate" | "company" | "listPoints" | "duration"; value: string } | null>(null);
   useEffect(() => setFact(null), [selectedId]);
 
@@ -1618,6 +1619,36 @@ function Home() {
         }
         if (cancelled) return;
         await new Promise((resolve) => window.setTimeout(resolve, 1100));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [songs]);
+
+  useEffect(() => {
+    const missing = songs.filter((song) => !song.lyrics && !lyricsTried.current.has(song.id));
+    if (!missing.length) return;
+    let cancelled = false;
+    (async () => {
+      for (const song of missing) {
+        if (cancelled) return;
+        lyricsTried.current.add(song.id);
+        try {
+          const result = await findLyrics({ data: { artist: song.artist, title: song.title } });
+          if (!result?.lines?.length) continue;
+          setSongs((prev) => {
+            const next = prev.map((item) =>
+              item.id === song.id && !item.lyrics ? { ...item, geniusUrl: result.source, lyrics: JSON.stringify(result) } : item,
+            );
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+            return next;
+          });
+        } catch {
+          /* leave the song without lyrics so a later open can retry */
+        }
+        if (cancelled) return;
+        await new Promise((resolve) => window.setTimeout(resolve, 800));
       }
     })();
     return () => {
