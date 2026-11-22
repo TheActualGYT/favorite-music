@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiClipRouteImport } from './routes/api/clip'
+import { Route as ApiLibraryRouteImport } from './routes/api/library'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +23,40 @@ const ApiClipRoute = ApiClipRouteImport.update({
   path: '/api/clip',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiLibraryRoute = ApiLibraryRouteImport.update({
+  id: '/api/library',
+  path: '/api/library',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/clip': typeof ApiClipRoute
+  '/api/library': typeof ApiLibraryRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/clip': typeof ApiClipRoute
+  '/api/library': typeof ApiLibraryRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/clip': typeof ApiClipRoute
+  '/api/library': typeof ApiLibraryRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/clip'
+  fullPaths: '/' | '/api/clip' | '/api/library'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/clip'
-  id: '__root__' | '/' | '/api/clip'
+  to: '/' | '/api/clip' | '/api/library'
+  id: '__root__' | '/' | '/api/clip' | '/api/library'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiClipRoute: typeof ApiClipRoute
+  ApiLibraryRoute: typeof ApiLibraryRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +75,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiClipRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/library': {
+      id: '/api/library'
+      path: '/api/library'
+      fullPath: '/api/library'
+      preLoaderRoute: typeof ApiLibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiClipRoute: ApiClipRoute,
+  ApiLibraryRoute: ApiLibraryRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

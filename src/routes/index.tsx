@@ -44,6 +44,16 @@ type View =
   | "all-albums";
 
 const STORAGE_KEY = "favoriteSongs";
+const LIBRARY_KEYS = [
+  STORAGE_KEY,
+  "gyt-group-roster",
+  "gyt-bias",
+  "gyt-member-colors",
+  "gyt-idol-photos",
+  "gyt-profile-crops",
+  "gyt-lyric-crops",
+  "gyt-profile-info",
+] as const;
 const YOUTUBE_KEY = "AIzaSyDHKgMCN9N1tuTX42EwAzx2phuS4hisW9k";
 const COUNT_STALE = 12 * 60 * 60 * 1000;
 
@@ -67,6 +77,66 @@ const MENUS = [
     ],
   },
 ];
+
+function libraryEndpoint() {
+  if (typeof window === "undefined") return "/api/library";
+  const host = window.location.hostname;
+  if (host === "localhost" || host === "127.0.0.1" || host.endsWith("vercel.app")) return "/api/library";
+  return "https://favorite-music.vercel.app/api/library";
+}
+
+function snapshotLibrary() {
+  const data: Record<string, unknown> = {};
+  for (const key of LIBRARY_KEYS) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
+    try {
+      data[key] = JSON.parse(raw);
+    } catch {
+      /* skip a broken entry */
+    }
+  }
+  return data;
+}
+
+function libraryHasEntries(data: Record<string, unknown>) {
+  const songs = data[STORAGE_KEY];
+  if (Array.isArray(songs) && songs.length > 0) return true;
+  return Object.entries(data).some(([key, value]) => {
+    if (key === STORAGE_KEY || !value || typeof value !== "object") return false;
+    return Object.keys(value as Record<string, unknown>).length > 0;
+  });
+}
+
+let libraryPause = false;
+let libraryTimer = 0;
+let libraryHooked = false;
+
+function queueLibrarySave() {
+  if (libraryPause || typeof window === "undefined") return;
+  window.clearTimeout(libraryTimer);
+  libraryTimer = window.setTimeout(() => {
+    const data = snapshotLibrary();
+    if (!libraryHasEntries(data) && !Array.isArray(data[STORAGE_KEY])) return;
+    void fetch(libraryEndpoint(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ data }),
+    }).catch(() => {});
+  }, 400);
+}
+
+function hookLibrary() {
+  if (libraryHooked || typeof window === "undefined") return;
+  libraryHooked = true;
+  const original = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = ((key: string, value: string) => {
+    original(key, value);
+    if (LIBRARY_KEYS.includes(key as (typeof LIBRARY_KEYS)[number])) queueLibrarySave();
+  }) as typeof localStorage.setItem;
+}
+
+if (typeof window !== "undefined") hookLibrary();
 
 function loadSongs(): Song[] {
   try {
@@ -912,6 +982,11 @@ function GroupProfile({ artist }: { artist: string }) {
     getGroup({ data: { artist } })
       .then((page) => {
         if (dead || !page?.members?.length) return;
+        const saved = loadRoster();
+        if (saved[key]?.length) {
+          setRoster(saved[key]);
+          return;
+        }
         const members = page.members.map((member) => ({
           name: member.name,
           born: member.born,
@@ -920,9 +995,9 @@ function GroupProfile({ artist }: { artist: string }) {
           flag: "",
           photo: member.photo,
         }));
-        const saved = loadRoster();
-        saved[key] = members;
-        localStorage.setItem(ROSTER_KEY, JSON.stringify(saved));
+        const next = loadRoster();
+        next[key] = members;
+        localStorage.setItem(ROSTER_KEY, JSON.stringify(next));
         window.dispatchEvent(new Event("gyt-roster"));
         setRoster(members);
       })
@@ -1269,7 +1344,42 @@ function Home() {
   useEffect(() => setFact(null), [selectedId]);
 
   useEffect(() => {
-    setSongs(loadSongs());
+    let dead = false;
+    (async () => {
+      const local = snapshotLibrary();
+      try {
+        const response = await fetch(libraryEndpoint());
+        const remote = response.ok ? ((await response.json()) as Record<string, unknown>) : {};
+        if (dead || remote.error) {
+          setSongs(loadSongs());
+          return;
+        }
+        if (libraryHasEntries(remote)) {
+          libraryPause = true;
+          for (const key of LIBRARY_KEYS) {
+            if (remote[key] === undefined) continue;
+            localStorage.setItem(key, JSON.stringify(remote[key]));
+          }
+          libraryPause = false;
+          setSongs(loadSongs());
+          window.dispatchEvent(new Event("gyt-roster"));
+          return;
+        }
+        setSongs(loadSongs());
+        if (libraryHasEntries(local)) {
+          await fetch(libraryEndpoint(), {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ data: local }),
+          });
+        }
+      } catch {
+        if (!dead) setSongs(loadSongs());
+      }
+    })();
+    return () => {
+      dead = true;
+    };
   }, []);
 
   useEffect(() => {
