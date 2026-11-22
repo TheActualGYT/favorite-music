@@ -132,6 +132,7 @@ function knownCompany(artist: string, title?: string): CompanyInfo | null {
   }
   if (name === "kissoflife" || name === "키스오브라이프") return { company: "S2 Entertainment" };
   if (name === "ateez" || name === "에이티즈") return { company: "KQ Entertainment" };
+  if (name === "bts" || name === "bangtan" || name === "bangtansonyeondan" || name === "방탄소년단") return { company: "Big Hit Music" };
   return null;
 }
 

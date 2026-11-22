@@ -229,6 +229,7 @@ function knownLabel(artist: string, title?: string) {
   }
   if (name === "kissoflife" || name === "키스오브라이프") return { company: "S2 Entertainment" };
   if (name === "ateez" || name === "에이티즈") return { company: "KQ Entertainment" };
+  if (name === "bts" || name === "bangtan" || name === "bangtansonyeondan" || name === "방탄소년단") return { company: "Big Hit Music" };
   return null;
 }
 
@@ -1311,12 +1312,15 @@ function Home() {
   }, [songs]);
 
   useEffect(() => {
-    const fills = songs.filter((song) => !song.company && knownLabel(song.artist, song.title));
-    if (fills.length > 0) {
+    const fixes = songs.filter((song) => {
+      const known = knownLabel(song.artist, song.title);
+      return known && song.company !== known.company;
+    });
+    if (fixes.length > 0) {
       setSongs((prev) => {
         const next = prev.map((song) => {
           const known = knownLabel(song.artist, song.title);
-          return known && !song.company ? { ...song, company: known.company, subLabel: undefined } : song;
+          return known && song.company !== known.company ? { ...song, company: known.company, subLabel: undefined } : song;
         });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
         return next;

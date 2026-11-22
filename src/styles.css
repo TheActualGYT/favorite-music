@@ -36,7 +36,7 @@
 
 .app-shell {
   --nav-h: 62px;
-  --side-w: 33%;
+  --side-w: 25%;
   --seam: 7px;
   position: relative;
   display: flex;
@@ -363,9 +363,29 @@
 
 .row.is-selected {
   overflow: hidden;
+  padding-right: 0;
   background: #323232;
   border-color: rgba(255, 255, 255, 0.42);
   box-shadow: inset 3px 0 0 #fff;
+}
+
+.row > .hero-clip {
+  right: 0;
+  width: 52%;
+  background: transparent;
+}
+
+.row > .hero-clip .clip-slot iframe,
+.row > .hero-clip .clip-cover img {
+  width: auto;
+  height: 340%;
+  aspect-ratio: 16 / 9;
+  max-width: none;
+  top: 50%;
+  left: auto;
+  right: -8%;
+  transform: translate(0, -50%);
+  object-fit: cover;
 }
 
 .rank {
