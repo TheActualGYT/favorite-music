@@ -1115,7 +1115,7 @@ function embedSrc(videoId: string, from: number, to: number) {
   return `https://www.youtube-nocookie.com/embed/${videoId}?${params}`;
 }
 
-function HeroClip({ videoId, start = 15 }: { videoId: string; start?: number }) {
+function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; start?: number; scope?: string }) {
   const poster = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
   const playFrom = Math.max(0, start - 4);
   const clipEnd = start + 24;
@@ -1203,7 +1203,7 @@ function HeroClip({ videoId, start = 15 }: { videoId: string; start?: number }) 
         <div key={index} className={active === index ? "clip-slot is-on" : "clip-slot"}>
           {srcs[index] ? (
             <iframe
-              id={`hero-clip-${videoId}-${index}`}
+              id={`${scope}-clip-${videoId}-${index}`}
               ref={frames[index]}
               src={srcs[index]}
               title=""
@@ -1684,10 +1684,12 @@ function Home() {
               </p>
             ) : (
               <div className="list">
-                {filteredSongs.map((song, index) => (
+                {filteredSongs.map((song, index) => {
+                  const selected = song.id === selectedId;
+                  return (
                   <div
                     key={song.id}
-                    className={song.id === selectedId ? "row is-selected" : "row"}
+                    className={selected ? "row is-selected" : "row"}
                     role="button"
                     tabIndex={0}
                     onClick={() => {
@@ -1703,6 +1705,9 @@ function Home() {
                       }
                     }}
                   >
+                    {selected && song.videoId ? (
+                      <HeroClip scope="row" videoId={song.videoId} start={song.clipStart ?? 15} />
+                    ) : null}
                     <span className="rank">#{index + 1}</span>
                     <span className="cover-frame">
                       {song.coverUrl ? (
@@ -1717,12 +1722,15 @@ function Home() {
                       <div className="row-title">{song.title}</div>
                       <div className="row-sub">{song.artist}</div>
                     </div>
-                    <div className="row-rating">
-                      <span className="row-sub">RATING</span>
-                      <Stars rating={song.rating} className="row-stars" />
-                    </div>
+                    {selected ? null : (
+                      <div className="row-rating">
+                        <span className="row-sub">RATING</span>
+                        <Stars rating={song.rating} className="row-stars" />
+                      </div>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )
           ) : null}
@@ -1804,7 +1812,6 @@ function Home() {
               />
             ) : (
             <article className="detail" style={{ "--cover": coverColor } as CSSProperties}>
-              <div className="detail-pin">
               <div className="detail-hero">
                 {selected.videoId ? (
                   <HeroClip
@@ -1823,7 +1830,6 @@ function Home() {
                 <button type="button" className="edit-btn" onClick={() => setEditing(true)}>
                   Edit
                 </button>
-              </div>
               </div>
               <div className="meta-grid">
                 <div className="card span-2 info-cell">

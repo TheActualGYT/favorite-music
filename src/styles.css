@@ -82,16 +82,8 @@
   height: var(--nav-h);
   padding: 0 1.5rem;
   overflow: visible;
-  background-color: #0d0d0d;
-  background-image:
-    linear-gradient(120deg, rgba(167, 139, 250, 0.16), transparent 42%, rgba(255, 255, 255, 0.05) 68%, transparent),
-    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    radial-gradient(circle at 0 0, rgba(196, 181, 253, 0.28) 0.9px, transparent 1.1px);
-  background-size: 220% 220%, 12px 12px, 12px 12px, 12px 12px;
-  background-position: 0 0, 0 0, 0 0, 0 0;
-  animation: texture-shift 16s ease-in-out infinite;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background: #0d0d0d;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .brand {
@@ -343,6 +335,7 @@
 }
 
 .row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0;
@@ -359,14 +352,29 @@
   box-shadow: 0 3px 5px rgba(0, 0, 0, 0.26);
 }
 
+.row > :not(.hero-clip) {
+  position: relative;
+  z-index: 1;
+}
+
 .row:hover {
   background: #4a4a4a;
 }
 
 .row.is-selected {
-  background: #4c465f;
-  border-color: #5c5674;
-  box-shadow: inset 3px 0 0 #fff, 0 3px 5px rgba(0, 0, 0, 0.26);
+  overflow: hidden;
+  background: #323232;
+  border-color: rgba(255, 255, 255, 0.42);
+  box-shadow: inset 3px 0 0 #fff;
+}
+
+.row.is-selected > .hero-clip {
+  width: 54%;
+}
+
+.row.is-selected > .hero-clip .clip-slot iframe {
+  width: 240%;
+  height: 240%;
 }
 
 .rank {
@@ -1012,9 +1020,14 @@
 /* restored newer song-page styles */
 .main {
   --cover: #a78bfa;
-  background:
-    linear-gradient(115deg, color-mix(in srgb, var(--cover) 12%, transparent), transparent 46%),
-    #1b1b1b;
+  background-color: #121214;
+  background-image:
+    radial-gradient(920px 560px at -6% -10%, color-mix(in srgb, var(--cover) 32%, transparent), transparent 64%),
+    radial-gradient(680px 420px at 112% 0%, rgba(124, 58, 237, 0.16), transparent 58%),
+    radial-gradient(540px 380px at 78% 115%, rgba(244, 182, 220, 0.08), transparent 62%),
+    linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: auto, auto, auto, 40px 40px, 40px 40px;
 }
 
 .detail {
@@ -1049,21 +1062,11 @@
   position: relative;
   z-index: 1;
   overflow: hidden;
-  margin-bottom: 0;
+  margin-bottom: 1.6rem;
   border: 1.5px solid rgba(255, 255, 255, 0.5);
   background:
     linear-gradient(135deg, rgba(167, 139, 250, 0.12), transparent 42%),
     #202020;
-}
-.detail-pin {
-  position: sticky;
-  top: 0;
-  z-index: 12;
-  margin: calc(var(--pad, 2.25rem) * -1) calc(var(--pad, 2.25rem) * -1) 1.6rem;
-  padding: var(--pad, 2.25rem) var(--pad, 2.25rem) 0.85rem;
-  background:
-    linear-gradient(115deg, color-mix(in srgb, var(--cover) 12%, transparent), transparent 46%),
-    #1b1b1b;
 }
 .detail-hero:hover { transform: none; }
 
