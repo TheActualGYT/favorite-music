@@ -348,6 +348,129 @@ export async function englishForLines(source: string, korean: string[]) {
   return translateLines(korean);
 }
 
+const PALETTE = ["#ff4d4d", "#ff8a1e", "#ffe14a", "#3ddc78", "#00ffff", "#3d7dff", "#b06bff", "#ff6bb5"];
+
+function lyricSlug(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/&/g, " and ")
+    .replace(/['’]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+}
+
+function isGenius(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "") === "genius.com";
+  } catch {
+    return false;
+  }
+}
+
+function geniusPageUrl(artist: string, title: string) {
+  const path = `${lyricSlug(artist)}-${lyricSlug(title)}-lyrics`.replace(/^-|-$/g, "");
+  return path.length > 8 ? `https://genius.com/${path}` : "";
+}
+
+function headerSingers(header: string) {
+  const after = header.split(":").slice(1).join(":").trim();
+  if (!after) return [] as string[];
+  const names: string[] = [];
+  for (const part of after.split(",")) {
+    const piece = part.replace(/\*/g, "").replace(/\(.*?\)/g, "").trim();
+    for (const name of piece.split(/\s*(?:&|and)\s*/i)) {
+      const clean = cleanName(name);
+      if (clean && clean.length < 24 && !names.includes(clean)) names.push(clean);
+    }
+  }
+  return names.filter((name) => !/^(VERSE|CHORUS|PRE CHORUS|POST CHORUS|BRIDGE|OUTRO|INTRO|HOOK|REFRAIN|BREAK)$/.test(name));
+}
+
+function geniusJunk(line: string) {
+  return /don'?t edit|do not edit|contributors|you might also like|translations|recommended songs/i.test(line)
+    || /^(romanization|english|hangul|korean)$/i.test(line);
+}
+
+function parseGenius(html: string, source: string): LyricsResult {
+  const markers = [...html.matchAll(/data-lyrics-container="true"/g)].map((match) => match.index ?? 0);
+  if (!markers.length) return null;
+  const blocks: string[] = [];
+  for (let index = 0; index < markers.length && index < 8; index += 1) {
+    const from = markers[index];
+    const open = html.indexOf(">", from);
+    if (open < 0 || open > from + 400) continue;
+    const end = markers[index + 1] ?? open + 20000;
+    blocks.push(html.slice(open + 1, Math.min(end, open + 20000)).replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, ""));
+  }
+  const text = blocks.join("\n");
+  const colors = new Map<string, string>();
+  const lines: LyricLine[] = [];
+  let singers: string[] = [];
+  for (const raw of text.split("\n")) {
+    const line = decode(raw);
+    if (!line || geniusJunk(line)) continue;
+    if (/^(embed|cancel|about|credits|tags|expand|comments)$/i.test(line)) break;
+    const header = line.match(/^\[([^\[\]]+)\]$/);
+    if (header) {
+      const next = headerSingers(header[1]);
+      if (next.length) singers = next;
+      continue;
+    }
+    if (!singers.length || line.length > 180 || /^<[^>]+>?$/.test(line)) continue;
+    const who = singers[0];
+    if (!colors.has(who)) colors.set(who, PALETTE[colors.size % PALETTE.length]);
+    lines.push({ who, color: colors.get(who) ?? ALL.color, korean: line, english: line });
+  }
+  if (lines.length < 4) return null;
+  return { v: 11, source, lines, members: [] };
+}
+
+async function archivedGenius(pageUrl: string) {
+  let hostPath = pageUrl;
+  try {
+    const url = new URL(pageUrl);
+    hostPath = `${url.hostname.replace(/^www\./, "")}${url.pathname}`;
+  } catch {
+    return "";
+  }
+  const cdx = await getText(`https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(hostPath)}&output=json&fl=timestamp,statuscode&filter=statuscode:200&limit=12`);
+  let rows: string[][] = [];
+  try {
+    const parsed: unknown = JSON.parse(cdx);
+    if (Array.isArray(parsed)) rows = parsed as string[][];
+  } catch {
+    rows = [];
+  }
+  const stamp = rows.slice(1).map((row) => row[0]).filter(Boolean).sort().at(-1);
+  if (!stamp) return "";
+  return getText(`https://web.archive.org/web/${stamp}/${pageUrl}`);
+}
+
+async function loadGenius(url: string, artist: string, title: string): Promise<LyricsResult> {
+  const pages = [...new Set([isGenius(url) ? url.split("?")[0] : "", geniusPageUrl(artist, title)].filter(Boolean))];
+  for (const page of pages) {
+    let html = await getText(page);
+    if (!html.includes("data-lyrics-container")) html = await archivedGenius(page);
+    const parsed = html ? parseGenius(html, page) : null;
+    if (!parsed) continue;
+    const english = await translateLines(parsed.lines.map((line) => line.korean));
+    english.forEach((line, index) => {
+      parsed.lines[index].english = line || parsed.lines[index].korean;
+    });
+    const totals = new Map<string, Member>();
+    for (const line of parsed.lines) {
+      const current = totals.get(line.who) ?? { name: line.who, color: line.color, lines: 0, words: 0 };
+      current.lines += 1;
+      current.words += wordsIn(line.korean);
+      totals.set(line.who, current);
+    }
+    parsed.members = [...totals.values()].sort((a, b) => b.lines - a.lines || b.words - a.words);
+    return parsed;
+  }
+  return null;
+}
+
 function isColorCoded(url: string) {
   try {
     const host = new URL(url).hostname.replace(/^www\./, "");
@@ -361,10 +484,11 @@ export async function fetchLyricsFromGenius(url: string, artist: string, title: 
   const parsed = fromGeniusUrl(url);
   const useArtist = artist || parsed.artist;
   const useTitle = title || parsed.title;
+  if (isGenius(url)) return loadGenius(url, useArtist, useTitle);
   const page = isColorCoded(url) ? url.split("#")[0] : await colorCodedPage(useArtist, useTitle);
-  if (!page) return null;
+  if (!page) return loadGenius("", useArtist, useTitle);
   const html = await getText(page);
-  if (!html) return null;
+  if (!html) return loadGenius("", useArtist, useTitle);
   const legendHtml = [...html.matchAll(/<(p|td)[^>]*text-align:\s*center[^>]*>([\s\S]*?)<\/\1>/gi)]
     .map((match) => match[2])
     .find((block) => (block.match(/color:\s*#[0-9a-fA-F]{3,8}/gi) || []).length >= 3) ?? "";
@@ -383,7 +507,7 @@ export async function fetchLyricsFromGenius(url: string, artist: string, title: 
     spoken = loose.spoken;
     translatedLines = loose.translation;
   }
-  if (!spoken.length) return null;
+  if (!spoken.length) return loadGenius("", useArtist, useTitle);
   const colorToName = new Map(legendMembers.map((member) => [member.color, member.name]));
   const lines: LyricLine[] = spoken.map((line) => ({
     who: colorToName.get(line.color ?? "") ?? ALL.name,

@@ -655,10 +655,10 @@ function LyricsBlock({
     setSourceError("");
     try {
       const ok = await onLoad(next);
-      if (!ok) setSourceError("Couldn't read lyrics from that page. Paste the colorcodedlyrics.com song link.");
+      if (!ok) setSourceError("Couldn't read lyrics from that page. Use the Color Coded Lyrics page, or the Genius page if it isn't there.");
       else setSourceUrl("");
     } catch {
-      setSourceError("Couldn't read lyrics from that page. Paste the colorcodedlyrics.com song link.");
+      setSourceError("Couldn't read lyrics from that page. Use the Color Coded Lyrics page, or the Genius page if it isn't there.");
     } finally {
       setSourceBusy(false);
     }
@@ -667,13 +667,13 @@ function LyricsBlock({
     <form className="lyric-source" onSubmit={loadSource}>
       <p className="lyrics-note">
         Member colors come from <a href="https://colorcodedlyrics.com" target="_blank" rel="noreferrer">Color Coded Lyrics</a>.
-        Paste that song’s page. A Genius link works too, but only if that site has the song.
+        If that site doesn't have the song, paste the <a href="https://genius.com" target="_blank" rel="noreferrer">Genius</a> page instead.
       </p>
       <div className="lyric-source-row">
         <input
           value={sourceUrl}
           onChange={(event) => setSourceUrl(event.target.value)}
-          placeholder="https://colorcodedlyrics.com/…"
+          placeholder="Color Coded Lyrics or Genius link"
           spellCheck={false}
         />
         <button type="submit" disabled={sourceBusy || !sourceUrl.trim()}>{sourceBusy ? "Loading…" : "Add lyrics"}</button>
@@ -725,7 +725,7 @@ function LyricsBlock({
                 <input
                   value={sourceUrl}
                   onChange={(event) => setSourceUrl(event.target.value)}
-                  placeholder="colorcodedlyrics.com link"
+                  placeholder="Color Coded Lyrics or Genius link"
                   spellCheck={false}
                 />
                 <button type="submit" disabled={sourceBusy || !sourceUrl.trim()}>{sourceBusy ? "…" : "Use page"}</button>
