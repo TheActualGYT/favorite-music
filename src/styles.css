@@ -360,23 +360,23 @@
 
 .row > .hero-clip {
   right: 0;
-  width: 46%;
-  background: #111;
-  container-type: size;
+  width: 48%;
+  background: #141414;
+  container-type: inline-size;
 }
 
 .row > .hero-clip .clip-slot iframe,
 .row > .hero-clip .clip-cover img {
-  width: max(100cqw, calc(100cqh * 16 / 9));
-  height: max(100cqh, calc(100cqw * 9 / 16));
-  max-width: none;
   top: 50%;
-  left: auto;
-  right: 0;
+  left: 50%;
+  right: auto;
+  width: 124cqw;
+  height: calc(124cqw * 9 / 16);
+  max-width: none;
   aspect-ratio: auto;
   object-fit: cover;
-  transform: translate(0, -50%) scale(1.04);
-  transform-origin: right center;
+  transform: translate(-50%, -50%);
+  transform-origin: center;
 }
 
 .rank {
