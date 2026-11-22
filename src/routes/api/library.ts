@@ -20,8 +20,7 @@ export const Route = createFileRoute("/api/library")({
           return json(await readLibrary());
         } catch (error) {
           const message = error instanceof Error ? error.message : "Could not load the library";
-          const keys = Object.keys(process.env).filter((key) => /DATA|NEON|POSTGRES|BLOB|KV|GITHUB|TOKEN|SECRET/i.test(key)).sort();
-          return json({ error: message, keys }, 500);
+          return json({ error: message }, 500);
         }
       },
       POST: async ({ request }) => {

@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { getSql } from "./db";
 
 const KEYS = [
@@ -28,7 +29,26 @@ function asJson(value: unknown) {
   return value ?? null;
 }
 
+function databaseUrl() {
+  const value = process.env.DATABASE_URL?.trim();
+  return value || "";
+}
+
+async function readCommittedLibrary() {
+  try {
+    const raw = await readFile(new URL("../../data/library.json", import.meta.url), "utf8");
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return parsed as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
 export async function readLibrary() {
+  if (!databaseUrl()) {
+    if (process.env.VERCEL) return readCommittedLibrary();
+  }
   const sql = await getSql();
   const rows = await sql<{ key: string; data: unknown }>`select key, data from library`;
   const data: Record<string, unknown> = {};
@@ -41,6 +61,9 @@ export async function readLibrary() {
 }
 
 export async function writeLibrary(input: unknown) {
+  if (!databaseUrl() && process.env.VERCEL) {
+    throw new Error("This Vercel project has no database yet, so new entries cannot be kept.");
+  }
   if (!input || typeof input !== "object" || Array.isArray(input)) return;
   const entries = Object.entries(input as Record<string, unknown>).filter(([key]) => isKey(key));
   if (!entries.length) return;
