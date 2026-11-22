@@ -222,18 +222,24 @@
   --top: calc(var(--nav-h) + 1px);
   --left: calc(var(--side-w) - var(--seam) + 1px);
   background-image: repeating-linear-gradient(
-    115deg,
+    90deg,
     #ffffff 0px,
-    #f7c6e3 180px,
-    #e7d6ff 360px,
-    #c4b5fd 540px,
-    #8b5cf6 720px,
-    #c4b5fd 900px,
-    #e7d6ff 1080px,
-    #f7c6e3 1260px,
-    #ffffff 1440px
+    #fde8f4 320px,
+    #f6c6e6 640px,
+    #ecc4f2 960px,
+    #e0d0ff 1280px,
+    #cbb8fd 1600px,
+    #b197f8 1920px,
+    #8b5cf6 2240px,
+    #b197f8 2560px,
+    #cbb8fd 2880px,
+    #e0d0ff 3200px,
+    #ecc4f2 3520px,
+    #f6c6e6 3840px,
+    #fde8f4 4160px,
+    #ffffff 4480px
   );
-  animation: seam-flow 16s linear infinite;
+  animation: seam-flow 28s linear infinite;
   -webkit-mask-image: linear-gradient(#fff, #fff), linear-gradient(#fff, #fff);
   mask-image: linear-gradient(#fff, #fff), linear-gradient(#fff, #fff);
   -webkit-mask-size: 100% var(--t), var(--t) 100%;
@@ -244,7 +250,7 @@
 
 @keyframes seam-flow {
   from { background-position: 0 0; }
-  to { background-position: 1305.083px 608.57px; }
+  to { background-position: 4480px 0; }
 }
 
 .workspace {
