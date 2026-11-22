@@ -60,11 +60,15 @@ function fromGeniusUrl(url: string) {
 }
 
 async function getText(url: string) {
-  const res = await fetch(url, {
-    headers: { "user-agent": "Mozilla/5.0 (compatible; GarrettKpopDatabase/1.0)", accept: "text/html,application/json" },
-  });
-  if (!res.ok) return "";
-  return res.text();
+  try {
+    const res = await fetch(url, {
+      headers: { "user-agent": "Mozilla/5.0 (compatible; GarrettKpopDatabase/1.0)", accept: "text/html,application/json" },
+    });
+    if (!res.ok) return "";
+    return res.text();
+  } catch {
+    return "";
+  }
 }
 
 async function lyricsProsPage(artist: string, title: string) {
@@ -373,18 +377,41 @@ function geniusPageUrl(artist: string, title: string) {
   return path.length > 8 ? `https://genius.com/${path}` : "";
 }
 
-function headerSingers(header: string) {
-  const after = header.split(":").slice(1).join(":").trim();
-  if (!after) return [] as string[];
-  const names: string[] = [];
+type GeniusStyle = "plain" | "italic" | "bold" | "both";
+type GeniusRoles = Record<GeniusStyle, string[]>;
+
+function emptyRoles(): GeniusRoles {
+  return { plain: [], italic: [], bold: [], both: [] };
+}
+
+function headerRoles(raw: string): GeniusRoles {
+  const roles = emptyRoles();
+  const after = raw.split(":").slice(1).join(":");
+  if (!after.trim()) return roles;
   for (const part of after.split(",")) {
-    const piece = part.replace(/\*/g, "").replace(/\(.*?\)/g, "").trim();
-    for (const name of piece.split(/\s*(?:&|and)\s*/i)) {
-      const clean = cleanName(name);
-      if (clean && clean.length < 24 && !names.includes(clean)) names.push(clean);
-    }
+    const name = cleanName(decode(part.replace(/<[^>]+>/g, "").replace(/\*/g, "")));
+    if (!name || name.length > 24 || /^(VERSE|CHORUS|PRE CHORUS|POST CHORUS|BRIDGE|OUTRO|INTRO|HOOK|REFRAIN|BREAK|INTERLUDE)$/.test(name)) continue;
+    const hasBold = /<b>|\*\*/i.test(part);
+    const hasItalic = /<i>|(^|[^*])\*(?!\*)/i.test(part);
+    const bucket: GeniusStyle = hasBold && hasItalic ? "both" : hasBold ? "bold" : hasItalic ? "italic" : "plain";
+    if (!roles[bucket].includes(name)) roles[bucket].push(name);
   }
-  return names.filter((name) => !/^(VERSE|CHORUS|PRE CHORUS|POST CHORUS|BRIDGE|OUTRO|INTRO|HOOK|REFRAIN|BREAK)$/.test(name));
+  return roles;
+}
+
+function styleName(roles: GeniusRoles, style: GeniusStyle) {
+  const order: GeniusStyle[] = style === "both"
+    ? ["both", "bold", "italic", "plain"]
+    : style === "bold"
+      ? ["bold", "plain", "italic", "both"]
+      : style === "italic"
+        ? ["italic", "plain", "bold", "both"]
+        : ["plain", "italic", "bold", "both"];
+  for (const key of order) {
+    if (!roles[key].length) continue;
+    return roles[key][0];
+  }
+  return "";
 }
 
 function geniusJunk(line: string) {
@@ -401,29 +428,124 @@ function parseGenius(html: string, source: string): LyricsResult {
     const open = html.indexOf(">", from);
     if (open < 0 || open > from + 400) continue;
     const end = markers[index + 1] ?? open + 20000;
-    blocks.push(html.slice(open + 1, Math.min(end, open + 20000)).replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, ""));
+    blocks.push(html.slice(open + 1, Math.min(end, open + 20000)));
   }
-  const text = blocks.join("\n");
   const colors = new Map<string, string>();
   const lines: LyricLine[] = [];
-  let singers: string[] = [];
-  for (const raw of text.split("\n")) {
-    const line = decode(raw);
-    if (!line || geniusJunk(line)) continue;
-    if (/^(embed|cancel|about|credits|tags|expand|comments)$/i.test(line)) break;
-    const header = line.match(/^\[([^\[\]]+)\]$/);
-    if (header) {
-      const next = headerSingers(header[1]);
-      if (next.length) singers = next;
+  let roles = emptyRoles();
+  let bold = 0;
+  let italic = 0;
+  let header = "";
+  let inHeader = false;
+  let segments: { style: GeniusStyle; text: string }[] = [];
+  const colorFor = (who: string) => {
+    const name = who.split(/\s+&\s+/)[0];
+    if (!colors.has(name)) colors.set(name, name === ALL.name ? ALL.color : PALETTE[(colors.size) % PALETTE.length]);
+    return colors.get(name) ?? ALL.color;
+  };
+  const flush = () => {
+    const text = decode(segments.map((segment) => segment.text).join(""));
+    const taken = segments;
+    segments = [];
+    if (!text || geniusJunk(text) || text.length > 180) return "keep" as const;
+    if (/^(embed|cancel|about|credits|tags|expand|comments)$/i.test(text)) return "stop" as const;
+    const weights: Record<GeniusStyle, number> = { plain: 0, italic: 0, bold: 0, both: 0 };
+    let paren = 0;
+    for (const segment of taken) {
+      for (const char of segment.text) {
+        if (char === "(") paren += 1;
+        else if (char === ")") paren = Math.max(0, paren - 1);
+        else if (!paren && !/\s/.test(char)) weights[segment.style] += 1;
+      }
+    }
+    const style = (Object.entries(weights) as [GeniusStyle, number][]).sort((a, b) => b[1] - a[1])[0][0];
+    const who = styleName(roles, weights[style] > 0 ? style : "plain");
+    if (!who) return "keep" as const;
+    lines.push({ who, color: colorFor(who), korean: text, english: text });
+    return "keep" as const;
+  };
+  for (const token of blocks.join("\n").matchAll(/<br\s*\/?>|<\/?i>|<\/?b>|<[^>]+>|[^<]+/gi)) {
+    const raw = token[0];
+    if (/^<br/i.test(raw)) {
+      if (flush() === "stop") break;
       continue;
     }
-    if (!singers.length || line.length > 180 || /^<[^>]+>?$/.test(line)) continue;
-    const who = singers[0];
-    if (!colors.has(who)) colors.set(who, PALETTE[colors.size % PALETTE.length]);
-    lines.push({ who, color: colors.get(who) ?? ALL.color, korean: line, english: line });
+    if (/^<\/?(?:i|b)>$/i.test(raw)) {
+      if (inHeader) header += raw;
+      if (/^<i>$/i.test(raw)) italic += 1;
+      else if (/^<\/i>$/i.test(raw)) italic = Math.max(0, italic - 1);
+      else if (/^<b>$/i.test(raw)) bold += 1;
+      else bold = Math.max(0, bold - 1);
+      continue;
+    }
+    if (raw.startsWith("<")) continue;
+    const style: GeniusStyle = bold && italic ? "both" : bold ? "bold" : italic ? "italic" : "plain";
+    let rest = raw;
+    while (rest) {
+      if (inHeader) {
+        const end = rest.indexOf("]");
+        header += end < 0 ? rest : rest.slice(0, end);
+        if (end < 0) break;
+        const next = headerRoles(header);
+        if (Object.values(next).some((names) => names.length)) roles = next;
+        header = "";
+        inHeader = false;
+        rest = rest.slice(end + 1);
+        continue;
+      }
+      const start = rest.indexOf("[");
+      if (start < 0) {
+        if (rest.trim()) segments.push({ style, text: rest });
+        break;
+      }
+      if (start > 0 && rest.slice(0, start).trim()) segments.push({ style, text: rest.slice(0, start) });
+      inHeader = true;
+      header = "";
+      rest = rest.slice(start + 1);
+    }
   }
+  flush();
   if (lines.length < 4) return null;
   return { v: 11, source, lines, members: [] };
+}
+
+function shareGroupLines(result: LyricsResult): LyricsResult {
+  if (!result) return result;
+  const names: string[] = [];
+  const remember = (name: string) => {
+    const clean = name.replace(/[,:;]+$/g, "").trim();
+    if (!clean || clean === ALL.name || names.includes(clean)) return;
+    names.push(clean);
+  };
+  for (const member of result.members) remember(member.name);
+  for (const line of result.lines) {
+    if (line.who === ALL.name) continue;
+    line.who.split(/\s+&\s+/).forEach(remember);
+  }
+  const totals = new Map<string, Member>();
+  for (const name of names) {
+    const existing = result.members.find((member) => member.name === name);
+    totals.set(name, {
+      name,
+      color: existing?.color || result.lines.find((line) => line.who === name)?.color || ALL.color,
+      photo: existing?.photo,
+      focus: existing?.focus,
+      zoom: existing?.zoom,
+      lines: 0,
+      words: 0,
+    });
+  }
+  for (const line of result.lines) {
+    const credited = line.who === ALL.name ? names : line.who.split(/\s+&\s+/);
+    for (const name of credited) {
+      const current = totals.get(name);
+      if (!current) continue;
+      current.lines += 1;
+      current.words += wordsIn(line.korean);
+    }
+  }
+  result.members = [...totals.values()].filter((member) => member.name !== ALL.name && member.lines > 0).sort((a, b) => b.lines - a.lines || b.words - a.words);
+  return result;
 }
 
 async function archivedGenius(pageUrl: string) {
@@ -466,7 +588,7 @@ async function loadGenius(url: string, artist: string, title: string): Promise<L
       totals.set(line.who, current);
     }
     parsed.members = [...totals.values()].sort((a, b) => b.lines - a.lines || b.words - a.words);
-    return parsed;
+    return shareGroupLines(parsed);
   }
   return null;
 }
@@ -484,9 +606,8 @@ export async function fetchLyricsFromGenius(url: string, artist: string, title: 
   const parsed = fromGeniusUrl(url);
   const useArtist = artist || parsed.artist;
   const useTitle = title || parsed.title;
-  if (isGenius(url)) return loadGenius(url, useArtist, useTitle);
   const page = isColorCoded(url) ? url.split("#")[0] : await colorCodedPage(useArtist, useTitle);
-  if (!page) return loadGenius("", useArtist, useTitle);
+  if (!page) return loadGenius(isGenius(url) ? url : "", useArtist, useTitle);
   const html = await getText(page);
   if (!html) return loadGenius("", useArtist, useTitle);
   const legendHtml = [...html.matchAll(/<(p|td)[^>]*text-align:\s*center[^>]*>([\s\S]*?)<\/\1>/gi)]
@@ -533,10 +654,10 @@ export async function fetchLyricsFromGenius(url: string, artist: string, title: 
     current.words += wordsIn(line.korean);
     totals.set(line.who, current);
   }
-  return {
+  return shareGroupLines({
     v: 11,
     source: page,
     lines,
     members: [...totals.values()].sort((a, b) => b.lines - a.lines || b.words - a.words),
-  };
+  });
 }

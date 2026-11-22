@@ -1312,8 +1312,8 @@
 .lyric-who { margin-right: 0.35rem; font-size: 0.78rem; font-weight: 750; letter-spacing: 0.04em; }
 .lyrics-text p { margin: 0 0 0.28rem; }
 .lyric-key-name { color: #eee; font-size: 0.78rem; font-weight: 750; letter-spacing: 0.03em; line-height: 1.15; }
-.lyric-name-row { display: flex; align-items: center; justify-content: space-between; gap: 0.35rem; }
-.bias-mini { color: #f0c14a; font-size: 0.85rem; line-height: 1; }
+.lyric-name-row { display: flex; align-items: center; justify-content: flex-start; gap: 0.28rem; }
+.bias-mini { color: #fff; font-size: 0.85rem; line-height: 1; }
 .lyric-key-time { margin-top: 0.05rem; color: #9a9a9a; font-size: 0.7rem; line-height: 1.15; }
 .member-photo-wrap { width: 42px; height: 42px; flex: none; overflow: hidden; border: 1.5px solid #fff; border-radius: 50%; background: #333; }
 .member-photo, .member-photo.is-empty { width: 100%; height: 100%; display: block; object-fit: cover; transform-origin: center; }

@@ -767,7 +767,10 @@ function LyricsBlock({
         </div>
         <aside className="lyric-side">
           <div className="lyric-key">
-            {(parsed.members ?? []).map((member) => {
+            {(() => {
+              const roster = parsed.members ?? [];
+              const group = roster.find((member) => member.name.replace(/[,:;]+$/g, "").trim() === "ALL");
+              return roster.filter((member) => member.name.replace(/[,:;]+$/g, "").trim() !== "ALL").map((member) => {
               const shown = member.name.replace(/[,:;]+$/g, "").trim();
               const color = memberColor(artist, shown, member.color);
               const saved = crops[cropId(artist, member.name)] ?? crops[cropId(artist, shown)];
@@ -778,6 +781,8 @@ function LyricsBlock({
               const zoom = saved?.zoom ?? profile?.zoom ?? member.zoom ?? 1.2;
               const photo = saved?.photo || profile?.photo || idolPhotos[nameKey(shown)] || idolPhotos[nameKey(member.name)] || member.photo;
               const isBias = nameKey(loadBias()[nameKey(artist)] || "") === nameKey(shown);
+              const lines = member.lines + (group?.lines ?? 0);
+              const words = (member.words ?? 0) + (group?.words ?? 0);
               return (
                 <div
                   key={member.name}
@@ -792,11 +797,12 @@ function LyricsBlock({
                       <div className="lyric-key-name" style={{ color }}>{shown}</div>
                       {isBias ? <span className="bias-mini">★</span> : null}
                     </div>
-                    <div className="lyric-key-time">{member.lines} lines · {member.words ?? 0} words</div>
+                    <div className="lyric-key-time">{lines} lines · {words} words</div>
                   </div>
                 </div>
               );
-            })}
+              });
+            })()}
           </div>
         </aside>
       </div>
