@@ -36,7 +36,7 @@
 
 .app-shell {
   --nav-h: 62px;
-  --side-w: 25%;
+  --side-w: 30%;
   --seam: 7px;
   position: relative;
   display: flex;
@@ -221,40 +221,29 @@
 .seam-h > i,
 .seam-v > i {
   position: absolute;
+  inset: 1px;
   display: block;
-  width: 100vw;
-  height: 100vh;
   background-image: linear-gradient(
     115deg,
     #ffffff 0%,
-    #f4b6dc 8%,
-    #d8b4fe 16%,
-    #7c3aed 28%,
-    #d8b4fe 40%,
-    #ffffff 50%,
-    #f4b6dc 58%,
-    #d8b4fe 66%,
-    #7c3aed 78%,
-    #d8b4fe 90%,
+    #f8d0ea 12%,
+    #e4d4fe 26%,
+    #b794f6 40%,
+    #7c3aed 50%,
+    #b794f6 60%,
+    #e4d4fe 74%,
+    #f8d0ea 88%,
     #ffffff 100%
   );
-  background-size: 200% 200%;
-  animation: seam-flow 18s linear infinite;
-}
-
-.seam-h > i {
-  top: calc(var(--nav-h) * -1);
-  left: 0;
-}
-
-.seam-v > i {
-  top: calc((var(--nav-h) + var(--seam) - 1px) * -1);
-  left: calc((var(--side-w) - var(--seam)) * -1);
+  background-size: 180vw 180vw;
+  background-attachment: fixed;
+  background-repeat: repeat;
+  animation: seam-flow 22s linear infinite;
 }
 
 @keyframes seam-flow {
-  from { background-position: 0% 0%; }
-  to { background-position: 100% 100%; }
+  from { background-position: 0 0; }
+  to { background-position: -180vw -180vw; }
 }
 
 .workspace {
@@ -371,21 +360,23 @@
 
 .row > .hero-clip {
   right: 0;
-  width: 52%;
-  background: transparent;
+  width: 46%;
+  background: #111;
+  container-type: size;
 }
 
 .row > .hero-clip .clip-slot iframe,
 .row > .hero-clip .clip-cover img {
-  width: auto;
-  height: 340%;
-  aspect-ratio: 16 / 9;
+  width: max(100cqw, calc(100cqh * 16 / 9));
+  height: max(100cqh, calc(100cqw * 9 / 16));
   max-width: none;
   top: 50%;
   left: auto;
-  right: -8%;
-  transform: translate(0, -50%);
+  right: 0;
+  aspect-ratio: auto;
   object-fit: cover;
+  transform: translate(0, -50%) scale(1.04);
+  transform-origin: right center;
 }
 
 .rank {
@@ -1139,10 +1130,11 @@
 
 .meta-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.75rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.75rem;
 }
+.meta-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.meta-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 1.25rem; }
 .span-2 { grid-column: span 2; }
 .info-cell { position: relative; }
 .cell-edit {

@@ -30,6 +30,9 @@ type Song = {
   spotifyAt?: number;
   youtubeViews?: number;
   youtubeAt?: number;
+  durationMs?: number;
+  durationManual?: boolean;
+  listPoints?: string;
 };
 
 type View =
@@ -93,6 +96,9 @@ function loadSongs(): Song[] {
       spotifyAt: song.spotifyAt,
       youtubeViews: song.youtubeViews,
       youtubeAt: song.youtubeAt,
+      durationMs: song.durationMs,
+      durationManual: song.durationManual,
+      listPoints: song.listPoints,
     }));
   } catch {
     return [];
@@ -123,6 +129,7 @@ type TrackInfo = {
   album: string;
   releaseDate: string;
   coverUrl?: string;
+  durationMs?: number;
 };
 
 async function fetchTrack(title: string, artist: string, album = ""): Promise<TrackInfo | null> {
@@ -140,6 +147,7 @@ async function fetchTrack(title: string, artist: string, album = ""): Promise<Tr
           collectionName?: string;
           releaseDate?: string;
           artworkUrl100?: string;
+          trackTimeMillis?: number;
         }[];
       };
       const results = data.results ?? [];
@@ -161,6 +169,7 @@ async function fetchTrack(title: string, artist: string, album = ""): Promise<Tr
         album: (match.collectionName ?? album).replace(/\s*[-–]\s*single$/i, "").trim(),
         releaseDate: match.releaseDate?.slice(0, 10) ?? "",
         coverUrl: match.artworkUrl100?.replace("100x100bb", "600x600bb"),
+        durationMs: match.trackTimeMillis,
       };
     } catch {
       // try the next query
@@ -206,6 +215,23 @@ function formatCount(value: number) {
   if (value >= 1_000_000) return { n: (value / 1_000_000).toFixed(1), unit: "M" };
   if (value >= 1_000) return { n: (value / 1_000).toFixed(1), unit: "K" };
   return { n: String(value), unit: "" };
+}
+
+function formatDuration(ms?: number) {
+  if (!ms || ms < 1000) return "—";
+  const total = Math.round(ms / 1000);
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+}
+
+function parseDuration(value: string) {
+  const trimmed = value.trim();
+  const clock = trimmed.match(/^(\d+):(\d{1,2})$/);
+  if (clock) return (Number(clock[1]) * 60 + Number(clock[2])) * 1000;
+  const seconds = Number(trimmed);
+  if (Number.isFinite(seconds) && seconds > 0) return Math.round(seconds * (seconds < 20 ? 60000 : 1000));
+  return undefined;
 }
 
 function formatDate(value: string) {
@@ -1239,7 +1265,7 @@ function Home() {
   const coverFix = useRef(false);
   const countsTried = useRef(new Set<string>());
   const companyTried = useRef(new Set<number>());
-  const [fact, setFact] = useState<{ field: "album" | "releaseDate" | "company"; value: string } | null>(null);
+  const [fact, setFact] = useState<{ field: "album" | "releaseDate" | "company" | "listPoints" | "duration"; value: string } | null>(null);
   useEffect(() => setFact(null), [selectedId]);
 
   useEffect(() => {
@@ -1269,7 +1295,7 @@ function Home() {
   useEffect(() => {
     const missing = songs.filter(
       (song) =>
-        (!song.coverUrl || !song.album || !song.releaseDate || !song.videoId) &&
+        (!song.coverUrl || !song.album || !song.releaseDate || !song.videoId || (!song.durationMs && !song.durationManual)) &&
         !coverTried.current.has(song.id),
     );
     if (missing.length === 0) return;
@@ -1279,7 +1305,7 @@ function Home() {
       const found = new Map<number, Partial<Song>>();
       for (const song of missing) {
         const [track, videoId] = await Promise.all([
-          !song.coverUrl || !song.album || !song.releaseDate
+          !song.coverUrl || !song.album || !song.releaseDate || (!song.durationMs && !song.durationManual)
             ? fetchTrack(song.title, song.artist, song.album)
             : Promise.resolve(null),
           !song.videoId ? fetchVideo(song.title, song.artist) : Promise.resolve(null),
@@ -1288,6 +1314,7 @@ function Home() {
         if (track?.coverUrl && !song.coverUrl) patch.coverUrl = track.coverUrl;
         if (track?.album && !song.album) patch.album = track.album;
         if (track?.releaseDate && !song.releaseDate) patch.releaseDate = track.releaseDate;
+        if (track?.durationMs && !song.durationMs && !song.durationManual) patch.durationMs = track.durationMs;
         if (videoId && !song.videoId && !song.videoUrl) patch.videoId = videoId;
         if (Object.keys(patch).length > 0) found.set(song.id, patch);
       }
@@ -1835,18 +1862,35 @@ function Home() {
                   Edit
                 </button>
               </div>
-              <div className="meta-grid">
-                <div className="card span-2 info-cell">
+              <div className="meta-grid meta-3">
+                <div className="card info-cell">
                   <span>Album / EP</span>
                   <a href={spotifySearch(`${albumInfo(selected.album || selected.title).name} ${selected.artist}`)} target="_blank" rel="noreferrer">
                     <strong className="value">{albumInfo(selected.album).name || "—"}</strong>
                   </a>
                   <button type="button" className="cell-edit" onClick={() => setFact({ field: "album", value: selected.album || "" })}>Edit</button>
                 </div>
-                <div className="card span-2 info-cell">
+                <div className="card info-cell">
                   <span>Release date</span>
                   <strong className="value">{selected.releaseDate ? formatDate(selected.releaseDate) : "—"}</strong>
                   <button type="button" className="cell-edit" onClick={() => setFact({ field: "releaseDate", value: selected.releaseDate || "" })}>Edit</button>
+                </div>
+                <div className="card info-cell">
+                  <span>Company</span>
+                  <strong className="company-name">{selected.company?.replace(/\s*\([^)]*\)/g, "").trim() || "—"}</strong>
+                  <button type="button" className="cell-edit" onClick={() => setFact({ field: "company", value: selected.company || "" })}>Edit</button>
+                </div>
+              </div>
+              <div className="meta-grid meta-4">
+                <div className="count info-cell">
+                  <span className="count-label">Song length</span>
+                  <strong>{formatDuration(selected.durationMs)}</strong>
+                  <button type="button" className="cell-edit" onClick={() => setFact({ field: "duration", value: formatDuration(selected.durationMs) === "—" ? "" : formatDuration(selected.durationMs) })}>Edit</button>
+                </div>
+                <div className="count info-cell">
+                  <span className="count-label">List points</span>
+                  <strong>{selected.listPoints?.trim() || "N/A"}</strong>
+                  <button type="button" className="cell-edit" onClick={() => setFact({ field: "listPoints", value: selected.listPoints || "" })}>Edit</button>
                 </div>
                 <a className="count" href={spotifySearch(`${selected.title} ${selected.artist}`)} target="_blank" rel="noreferrer">
                   <span className="count-label">Spotify<SpotifyMark /></span>
@@ -1863,11 +1907,6 @@ function Home() {
                     <strong><CountValue /></strong>
                   </div>
                 )}
-                <div className="card span-2 info-cell">
-                  <span>Company</span>
-                  <strong className="company-name">{selected.company?.replace(/\s*\([^)]*\)/g, "").trim() || "—"}</strong>
-                  <button type="button" className="cell-edit" onClick={() => setFact({ field: "company", value: selected.company || "" })}>Edit</button>
-                </div>
               </div>
               {fact ? (
                 <form
@@ -1876,7 +1915,15 @@ function Home() {
                     event.preventDefault();
                     const value = fact.value.trim();
                     setSongs((prev) => {
-                      const next = prev.map((item) => (item.id === selected.id ? { ...item, [fact.field]: value } : item));
+                      const next = prev.map((item) => {
+                        if (item.id !== selected.id) return item;
+                        if (fact.field === "duration") {
+                          const durationMs = parseDuration(value);
+                          return durationMs ? { ...item, durationMs, durationManual: true } : item;
+                        }
+                        if (fact.field === "listPoints") return { ...item, listPoints: value };
+                        return { ...item, [fact.field]: value };
+                      });
                       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
                       return next;
                     });
@@ -1884,9 +1931,10 @@ function Home() {
                   }}
                 >
                   <label>
-                    {fact.field === "album" ? "Album / EP" : fact.field === "releaseDate" ? "Release date" : "Company"}
+                    {fact.field === "album" ? "Album / EP" : fact.field === "releaseDate" ? "Release date" : fact.field === "company" ? "Company" : fact.field === "duration" ? "Song length" : "List points"}
                     <input
                       type={fact.field === "releaseDate" ? "date" : "text"}
+                      placeholder={fact.field === "duration" ? "3:02" : fact.field === "listPoints" ? "N/A" : undefined}
                       value={fact.value}
                       onChange={(event) => setFact({ ...fact, value: event.target.value })}
                     />
