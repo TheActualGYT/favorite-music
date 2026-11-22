@@ -67,7 +67,8 @@
 .app-shell.is-scrolling::before,
 .app-shell.is-scrolling .nav,
 .app-shell.is-scrolling .sidebar,
-.app-shell.is-scrolling .seam-fill::before {
+.app-shell.is-scrolling .seam-h > i,
+.app-shell.is-scrolling .seam-v > i {
   animation-play-state: paused;
 }
 
@@ -194,84 +195,61 @@
   pointer-events: none;
 }
 
-.seam-stroke,
-.seam-fill {
+.seam-h,
+.seam-v {
   position: absolute;
-  inset: 0;
-  display: block;
-  pointer-events: none;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-}
-
-.seam-stroke {
-  --t: var(--seam);
-  --top: var(--nav-h);
-  --left: calc(var(--side-w) - var(--seam));
-  background: #fff;
-  -webkit-mask-image: linear-gradient(#fff, #fff), linear-gradient(#fff, #fff);
-  mask-image: linear-gradient(#fff, #fff), linear-gradient(#fff, #fff);
-  -webkit-mask-size: 100% var(--t), var(--t) 100%;
-  mask-size: 100% var(--t), var(--t) 100%;
-  -webkit-mask-position: 0 var(--top), var(--left) var(--top);
-  mask-position: 0 var(--top), var(--left) var(--top);
-}
-
-.seam-fill {
-  --t: calc(var(--seam) - 2px);
-  --top: calc(var(--nav-h) + 1px);
-  --left: calc(var(--side-w) - var(--seam) + 1px);
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(#fff, #fff), linear-gradient(#fff, #fff);
-  mask-image: linear-gradient(#fff, #fff), linear-gradient(#fff, #fff);
-  -webkit-mask-size: 100% var(--t), var(--t) 100%;
-  mask-size: 100% var(--t), var(--t) 100%;
-  -webkit-mask-position: 0 var(--top), var(--left) var(--top);
-  mask-position: 0 var(--top), var(--left) var(--top);
+  border: 1px solid #fff;
+  box-sizing: border-box;
+  pointer-events: none;
 }
 
-.seam-fill::before {
-  content: "";
-  position: absolute;
-  top: -48px;
-  bottom: -48px;
+.seam-h {
+  top: var(--nav-h);
   left: 0;
-  width: 600%;
+  right: 0;
+  height: var(--seam);
+}
+
+.seam-v {
+  top: var(--nav-h);
+  bottom: 0;
+  left: calc(var(--side-w) - var(--seam));
+  width: var(--seam);
+}
+
+.seam-h > i,
+.seam-v > i {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 200vw;
   background: linear-gradient(
     90deg,
     #ffffff 0%,
-    #fde8f4 4%,
-    #f6c6e6 8%,
-    #ecc8f4 12%,
-    #dfd0ff 16%,
-    #cbb6fd 20%,
-    #b197f8 23%,
-    #8b5cf6 25%,
-    #b197f8 27%,
-    #cbb6fd 30%,
-    #dfd0ff 34%,
-    #ecc8f4 38%,
-    #f6c6e6 42%,
-    #fde8f4 46%,
+    #fde8f4 7%,
+    #f6c6e6 14%,
+    #e4d0ff 21%,
+    #cbb6fd 28%,
+    #8b5cf6 36%,
+    #cbb6fd 42%,
+    #f6c6e6 47%,
     #ffffff 50%,
-    #fde8f4 54%,
-    #f6c6e6 58%,
-    #ecc8f4 62%,
-    #dfd0ff 66%,
-    #cbb6fd 70%,
-    #b197f8 73%,
-    #8b5cf6 75%,
-    #b197f8 77%,
-    #cbb6fd 80%,
-    #dfd0ff 84%,
-    #ecc8f4 88%,
-    #f6c6e6 92%,
-    #fde8f4 96%,
+    #fde8f4 57%,
+    #f6c6e6 64%,
+    #e4d0ff 71%,
+    #cbb6fd 78%,
+    #8b5cf6 86%,
+    #cbb6fd 92%,
+    #f6c6e6 97%,
     #ffffff 100%
   );
-  filter: blur(20px);
-  animation: seam-flow 22s linear infinite;
+  animation: seam-flow 18s linear infinite;
 }
+
+.seam-h > i { left: -1px; }
+
+.seam-v > i { left: calc(-1 * (var(--side-w) - var(--seam)) - 1px); }
 
 @keyframes seam-flow {
   from { transform: translate3d(0, 0, 0); }
@@ -587,11 +565,17 @@
 
 .main {
   --pad: 2.25rem;
+  position: relative;
+  z-index: 1;
   min-width: 0;
-  flex: 1;
+  min-height: 100%;
+  flex: 1 1 auto;
+  align-self: stretch;
   overflow: auto;
+  margin-left: -2px;
   padding: var(--pad);
-  background: #1b1b1b;
+  padding-left: calc(var(--pad) + 2px);
+  background-color: #161618;
 }
 
 .placeholder {
@@ -1006,7 +990,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .edge-fill,
-  .seam-fill::before,
+  .seam-h > i,
+  .seam-v > i,
   .app-shell::before,
   .detail,
   .sidebar,
@@ -1037,10 +1022,8 @@
     display: none;
   }
 
-  .seam-stroke,
-  .seam-fill {
-    -webkit-mask-size: 100% var(--t), 0 0;
-    mask-size: 100% var(--t), 0 0;
+  .seam-v {
+    display: none;
   }
 
   .main {
@@ -1053,14 +1036,11 @@
 /* restored newer song-page styles */
 .main {
   --cover: #a78bfa;
-  background-color: #121214;
+  background-color: #161618;
   background-image:
-    radial-gradient(920px 560px at -6% -10%, color-mix(in srgb, var(--cover) 32%, transparent), transparent 64%),
-    radial-gradient(680px 420px at 112% 0%, rgba(124, 58, 237, 0.16), transparent 58%),
-    radial-gradient(540px 380px at 78% 115%, rgba(244, 182, 220, 0.08), transparent 62%),
     linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
-  background-size: auto, auto, auto, 40px 40px, 40px 40px;
+  background-size: 40px 40px, 40px 40px;
 }
 
 .detail {

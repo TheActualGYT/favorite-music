@@ -1797,8 +1797,8 @@ function Home() {
         </nav>
       </header>
       <div className="seam" aria-hidden="true">
-        <i className="seam-stroke" />
-        <i className="seam-fill" />
+        <div className="seam-h"><i /></div>
+        <div className="seam-v"><i /></div>
       </div>
 
       <div className="workspace">
@@ -2315,8 +2315,8 @@ function SongForm({
         </select>
       </div>
       <div className="field">
-        <label htmlFor="edit-clip">MV start</label>
-        <input id="edit-clip" name="clipStart" placeholder="0:26.5" defaultValue={formatTimestamp(song.clipStart)} />
+        <label htmlFor="edit-clip">MV Preview</label>
+        <input id="edit-clip" name="clipStart" placeholder="0:00.0" defaultValue={formatTimestamp(song.clipStart)} />
       </div>
       <div className="field">
         <label htmlFor="edit-video">YouTube link</label>
@@ -2388,7 +2388,7 @@ function AddModal({
         artist,
         album: track?.album ?? "",
         releaseDate: track?.releaseDate ?? "",
-        rating: Number(form.get("rating") ?? 5),
+        rating: String(form.get("rating") ?? "") === "" ? 0 : Number(form.get("rating")),
         notes: String(form.get("notes") ?? "").trim(),
         coverUrl: track?.coverUrl,
         videoId: videoId ?? undefined,
@@ -2421,7 +2421,8 @@ function AddModal({
         </div>
         <div className="field">
           <label htmlFor="rating">Rating</label>
-          <select id="rating" name="rating" defaultValue="5">
+          <select id="rating" name="rating" defaultValue="">
+            <option value="">No rating</option>
             <option value="5">★★★★★ (5)</option>
             <option value="4.5">★★★★½ (4.5)</option>
             <option value="4">★★★★☆ (4)</option>
@@ -2435,12 +2436,12 @@ function AddModal({
           </select>
         </div>
         <div className="field">
-          <label htmlFor="clipStart">MV start</label>
-          <input id="clipStart" name="clipStart" placeholder="0:26.5" />
+          <label htmlFor="clipStart">MV Preview</label>
+          <input id="clipStart" name="clipStart" placeholder="0:00.0" />
         </div>
         <div className="field">
           <label htmlFor="notes">Notes</label>
-          <textarea id="notes" name="notes" placeholder="Why do you love this song?" />
+          <textarea id="notes" name="notes" />
         </div>
         <div className="field">
           <label htmlFor="position">List placement</label>
