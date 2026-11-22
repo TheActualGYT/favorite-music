@@ -67,7 +67,7 @@
 .app-shell.is-scrolling::before,
 .app-shell.is-scrolling .nav,
 .app-shell.is-scrolling .sidebar,
-.app-shell.is-scrolling .seam-fill {
+.app-shell.is-scrolling .seam-fill::before {
   animation-play-state: paused;
 }
 
@@ -221,25 +221,7 @@
   --t: calc(var(--seam) - 2px);
   --top: calc(var(--nav-h) + 1px);
   --left: calc(var(--side-w) - var(--seam) + 1px);
-  background-image: repeating-linear-gradient(
-    90deg,
-    #ffffff 0px,
-    #fde8f4 320px,
-    #f6c6e6 640px,
-    #ecc4f2 960px,
-    #e0d0ff 1280px,
-    #cbb8fd 1600px,
-    #b197f8 1920px,
-    #8b5cf6 2240px,
-    #b197f8 2560px,
-    #cbb8fd 2880px,
-    #e0d0ff 3200px,
-    #ecc4f2 3520px,
-    #f6c6e6 3840px,
-    #fde8f4 4160px,
-    #ffffff 4480px
-  );
-  animation: seam-flow 28s linear infinite;
+  overflow: hidden;
   -webkit-mask-image: linear-gradient(#fff, #fff), linear-gradient(#fff, #fff);
   mask-image: linear-gradient(#fff, #fff), linear-gradient(#fff, #fff);
   -webkit-mask-size: 100% var(--t), var(--t) 100%;
@@ -248,9 +230,52 @@
   mask-position: 0 var(--top), var(--left) var(--top);
 }
 
+.seam-fill::before {
+  content: "";
+  position: absolute;
+  top: -48px;
+  bottom: -48px;
+  left: 0;
+  width: 600%;
+  background: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    #fde8f4 4%,
+    #f6c6e6 8%,
+    #ecc8f4 12%,
+    #dfd0ff 16%,
+    #cbb6fd 20%,
+    #b197f8 23%,
+    #8b5cf6 25%,
+    #b197f8 27%,
+    #cbb6fd 30%,
+    #dfd0ff 34%,
+    #ecc8f4 38%,
+    #f6c6e6 42%,
+    #fde8f4 46%,
+    #ffffff 50%,
+    #fde8f4 54%,
+    #f6c6e6 58%,
+    #ecc8f4 62%,
+    #dfd0ff 66%,
+    #cbb6fd 70%,
+    #b197f8 73%,
+    #8b5cf6 75%,
+    #b197f8 77%,
+    #cbb6fd 80%,
+    #dfd0ff 84%,
+    #ecc8f4 88%,
+    #f6c6e6 92%,
+    #fde8f4 96%,
+    #ffffff 100%
+  );
+  filter: blur(20px);
+  animation: seam-flow 22s linear infinite;
+}
+
 @keyframes seam-flow {
-  from { background-position: 0 0; }
-  to { background-position: 4480px 0; }
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
 }
 
 .workspace {
@@ -981,7 +1006,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .edge-fill,
-  .seam-fill,
+  .seam-fill::before,
   .app-shell::before,
   .detail,
   .sidebar,
