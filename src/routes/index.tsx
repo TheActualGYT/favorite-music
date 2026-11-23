@@ -163,7 +163,7 @@ function loadSongs(): Song[] {
       clipUrl: song.clipUrl,
       company: isPersonCompany(song.company) ? undefined : song.company?.replace(/\s*\([^)]*\)/g, "").trim() || undefined,
       subLabel: undefined,
-      lyrics: typeof song.lyrics === "string" && /"v":\s*11/.test(song.lyrics)
+      lyrics: typeof song.lyrics === "string" && song.lyrics.includes('"lines"')
         ? song.lyrics
         : song.lyrics && typeof song.lyrics === "object"
           ? JSON.stringify(song.lyrics)
@@ -596,15 +596,19 @@ function artistMembers(artist: string): string[] {
 function LyricsBlock({
   text,
   artist = "",
-  onChange,
+  onSave,
   onReset,
+  onDirtyChange,
 }: {
   text?: string;
   artist?: string;
-  onChange: (lyrics: string) => void;
+  onSave: (lyrics: string) => void;
   onReset: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
-  const data = normalizeLyrics(text);
+  const saved = normalizeLyrics(text);
+  const [draft, setDraft] = useState<LyricsData>(saved);
+  const [english, setEnglish] = useState(false);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const openBtn = useRef<HTMLButtonElement | null>(null);
@@ -641,17 +645,25 @@ function LyricsBlock({
     };
   }, [openIndex]);
   void rosterTick;
+  useEffect(() => setDraft(normalizeLyrics(text)), [text]);
   const available = artistMembers(artist);
-  const update = (next: LyricsData) => onChange(JSON.stringify(next));
+  const data = draft;
+  const submitted = Boolean(data.members?.length);
+  const dirty = JSON.stringify(data.lines) !== JSON.stringify(saved.lines) || Boolean(data.members) !== Boolean(saved.members);
+  useEffect(() => onDirtyChange?.(dirty), [dirty]);
+  const persist = (next: LyricsData) => onSave(JSON.stringify(next));
   const setLine = (index: number, patch: Partial<LyricLine>) => {
-    const lines = data.lines.map((line, i) => (i === index ? { ...line, ...patch } : line));
-    update({ v: 12, lines });
+    setDraft((current) => ({
+      ...current,
+      members: undefined,
+      lines: current.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+    }));
   };
   const addLine = () => {
-    update({ v: 12, lines: [...data.lines, { text: "", members: [] }] });
+    setDraft((current) => ({ ...current, members: undefined, lines: [...current.lines, { text: "", members: [] }] }));
   };
   const removeLine = (index: number) => {
-    update({ v: 12, lines: data.lines.filter((_, i) => i !== index) });
+    setDraft((current) => ({ ...current, members: undefined, lines: current.lines.filter((_, i) => i !== index) }));
   };
   const toggleMember = (index: number, name: string) => {
     const current = data.lines[index].members;
@@ -679,9 +691,11 @@ function LyricsBlock({
         : label.split(/\s*(?:&|and|\+)\s*/i).map((part) => part.trim()).filter(Boolean).slice(0, 2);
       return { text: tagged[2], members: parts };
     });
-    const lines = [...data.lines];
-    lines.splice(index, 1, ...parsed);
-    update({ v: 12, lines });
+    setDraft((current) => {
+      const lines = [...current.lines];
+      lines.splice(index, 1, ...parsed);
+      return { v: 12, lines };
+    });
   };
 
   const submit = () => {
@@ -700,9 +714,12 @@ function LyricsBlock({
       .filter(([name]) => name !== "ALL")
       .sort((a, b) => b[1].lines - a[1].lines || b[1].words - a[1].words)
       .map(([name, value]) => ({ name, ...value }));
-    update({ v: 12, lines: data.lines, members });
+    const next = { v: 12 as const, lines: data.lines, members };
+    setDraft(next);
+    persist(next);
     setOpenIndex(null);
   };
+  const save = () => persist({ v: 12, lines: data.lines });
   const ranked = data.members ?? [];
 
   if (data.lines.length === 0) {
@@ -723,8 +740,21 @@ function LyricsBlock({
     <section className="lyrics">
       <div className="lyrics-top">
         <div className="lyrics-head">Lyrics</div>
-        <button type="button" className="lyrics-add" onClick={addLine}>Add line</button>
-        <button type="button" className="lyrics-submit" onClick={submit}>Submit</button>
+        {submitted ? (
+          <label className="lang-switch">
+            <span className={english ? "" : "is-on"}>KO</span>
+            <button type="button" className={english ? "is-english" : ""} onClick={() => setEnglish((value) => !value)} aria-label="Toggle translation">
+              <span />
+            </button>
+            <span className={english ? "is-on" : ""}>EN</span>
+          </label>
+        ) : (
+          <>
+            <button type="button" className="lyrics-add" onClick={addLine}>Add line</button>
+            <button type="button" className="lyrics-save" onClick={save} disabled={!dirty}>Save</button>
+            <button type="button" className="lyrics-submit" onClick={submit}>Submit</button>
+          </>
+        )}
         <button type="button" className="lyrics-reset" onClick={onReset}>Reset</button>
       </div>
       <div className="lyrics-layout">
@@ -795,7 +825,8 @@ function LyricsBlock({
                 </div>
                 <input
                   className="lyric-input"
-                  value={line.text}
+                  value={submitted && english && line.english ? line.english : line.text}
+                  readOnly={submitted}
                   onChange={(event) => setLine(index, { text: event.target.value })}
                   onPaste={(event) => {
                     const raw = event.clipboardData.getData("text");
@@ -1374,6 +1405,8 @@ function Home() {
   const [view, setView] = useState<View>("top-songs");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [lyricsDirty, setLyricsDirty] = useState(false);
+  const [leavePrompt, setLeavePrompt] = useState<null | (() => void)>(null);
   const [groupName, setGroupName] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [thoughtsOpen, setThoughtsOpen] = useState(false);
@@ -1388,6 +1421,23 @@ function Home() {
   const companyTried = useRef(new Set<number>());
   const [fact, setFact] = useState<{ field: "album" | "releaseDate" | "company" | "listPoints" | "duration"; value: string } | null>(null);
   useEffect(() => setFact(null), [selectedId]);
+  useEffect(() => setLyricsDirty(false), [selectedId]);
+  useEffect(() => {
+    if (!lyricsDirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [lyricsDirty]);
+  const requestLeave = (go: () => void) => {
+    if (!lyricsDirty) {
+      go();
+      return;
+    }
+    setLeavePrompt(() => go);
+  };
 
   useEffect(() => {
     let dead = false;
@@ -1898,16 +1948,18 @@ function Home() {
                     className={selected ? "row is-selected" : "row"}
                     role="button"
                     tabIndex={0}
-                    onClick={() => {
+                    onClick={() => requestLeave(() => {
                       setSelectedId(song.id);
                       setGroupName(null);
                       setEditing(false);
-                    }}
+                    })}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        setSelectedId(song.id);
-                        setGroupName(null);
+                        requestLeave(() => {
+                          setSelectedId(song.id);
+                          setGroupName(null);
+                        });
                       }
                     }}
                   >
@@ -1955,10 +2007,10 @@ function Home() {
                     key={row.name}
                     type="button"
                     className={groupName === row.name ? "row is-selected" : "row"}
-                    onClick={() => {
+                    onClick={() => requestLeave(() => {
                       setGroupName(row.name);
                       setSelectedId(null);
-                    }}
+                    })}
                   >
                     <div className="row-title">{row.name}</div>
                     <div className="row-sub">
@@ -1980,10 +2032,10 @@ function Home() {
                     key={row.name}
                     type="button"
                     className={groupName === row.name ? "row is-selected" : "row"}
-                    onClick={() => {
+                    onClick={() => requestLeave(() => {
                       setGroupName(row.name);
                       setSelectedId(null);
-                    }}
+                    })}
                   >
                     <div className="row-title">{row.name}</div>
                     <div className="row-sub">
@@ -2160,7 +2212,7 @@ function Home() {
               <LyricsBlock
                 text={selected.lyrics}
                 artist={selected.artist}
-                onChange={(lyrics) => {
+                onSave={(lyrics) => {
                   setSongs((prev) => {
                     const next = prev.map((item) =>
                       item.id === selected.id ? { ...item, geniusUrl: undefined, lyrics } : item,
@@ -2168,8 +2220,10 @@ function Home() {
                     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
                     return next;
                   });
+                  setLyricsDirty(false);
                   flushLibrarySave();
                 }}
+                onDirtyChange={setLyricsDirty}
                 onReset={() => {
                   setSongs((prev) => {
                     const next = prev.map((item) => item.id === selected.id ? { ...item, geniusUrl: undefined, lyrics: undefined } : item);
@@ -2187,14 +2241,14 @@ function Home() {
               title={groupName}
               subtitle="Artist"
               songs={artistRows.find((r) => r.name === groupName)?.items ?? []}
-              onOpen={(id) => setSelectedId(id)}
+              onOpen={(id) => requestLeave(() => setSelectedId(id))}
             />
           ) : groupName ? (
             <GroupDetail
               title={groupName}
               subtitle="Album"
               songs={albumRows.find((r) => r.name === groupName)?.items ?? []}
-              onOpen={(id) => setSelectedId(id)}
+              onOpen={(id) => requestLeave(() => setSelectedId(id))}
             />
           ) : (
             <div className="placeholder">Select something from the list to view details</div>
@@ -2202,6 +2256,23 @@ function Home() {
         </main>
       </div>
 
+      {leavePrompt ? (
+        <div className="leave-modal" role="dialog" aria-modal="true">
+          <div className="leave-card">
+            <h2>Leave without saving?</h2>
+            <p>You have unsaved lyric changes. Leave this page and lose them, or stay and save first.</p>
+            <div className="actions">
+              <button type="button" className="primary" onClick={() => setLeavePrompt(null)}>Stay</button>
+              <button type="button" className="ghost" onClick={() => {
+                const go = leavePrompt;
+                setLeavePrompt(null);
+                setLyricsDirty(false);
+                go();
+              }}>Leave</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {adding ? (
         <AddModal
           nextPosition={songs.length + 1}

@@ -1336,6 +1336,8 @@
 .lyrics-add { border: 1px solid rgba(255,255,255,0.28); border-radius: 999px; background: transparent; color: #eee; font: inherit; font-size: 0.75rem; padding: 0.32rem 0.85rem; cursor: pointer; }
 .lyrics-add { margin-left: auto; }
 .lyrics-submit { border: 1px solid rgba(255,255,255,0.5); border-radius: 999px; background: #fff; color: #111; font: inherit; font-size: 0.75rem; font-weight: 650; padding: 0.32rem 0.9rem; cursor: pointer; }
+.lyrics-save { border: 1px solid rgba(255,255,255,0.35); border-radius: 999px; background: transparent; color: #eee; font: inherit; font-size: 0.75rem; padding: 0.32rem 0.85rem; cursor: pointer; }
+.lyrics-save:disabled { opacity: 0.45; cursor: default; }
 .lyrics-editor { display: flex; flex-direction: column; gap: 0.35rem; max-height: 28rem; overflow-y: auto; padding-right: 0.2rem; overflow-x: visible; }
 .lyric-row { display: grid; grid-template-columns: 1.6rem 11.5rem minmax(0, 1fr) 1.6rem; align-items: center; gap: 0.35rem; }
 .lyric-num { color: #888; font-size: 0.75rem; font-weight: 650; text-align: left; }
@@ -1455,3 +1457,9 @@
   .lyrics-layout { grid-template-columns: 1fr; }
   .lyrics-top { flex-wrap: wrap; }
 }
+
+.leave-modal { position: fixed; inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.62); }
+.leave-card { width: min(26rem, calc(100% - 2rem)); border-radius: 1rem; background: #1c1c1c; box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 24px 60px rgba(0,0,0,0.5); padding: 1.2rem 1.25rem; }
+.leave-card h2 { margin: 0; color: #fff; font-size: 1.15rem; }
+.leave-card p { margin: 0.55rem 0 1rem; color: #c7c7c7; line-height: 1.45; }
+.leave-card .actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
