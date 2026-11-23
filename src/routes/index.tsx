@@ -599,17 +599,20 @@ function LyricsBlock({
   artist = "",
   onSave,
   onReset,
+  onEdit,
   onDirtyChange,
 }: {
   text?: string;
   artist?: string;
   onSave: (lyrics: string) => void;
   onReset: () => void;
+  onEdit?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const saved = normalizeLyrics(text);
   const [draft, setDraft] = useState<LyricsData>(saved);
   const [english, setEnglish] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const openBtn = useRef<HTMLButtonElement | null>(null);
@@ -770,7 +773,8 @@ function LyricsBlock({
             </button>
             <span className={english ? "is-on" : ""}>EN</span>
           </label>
-          <button type="button" className="lyrics-reset" onClick={onReset}>Reset</button>
+          <button type="button" className="lyrics-reset" onClick={() => onEdit?.()}>Edit</button>
+          <button type="button" className="lyrics-reset" onClick={() => setConfirmReset(true)}>Reset</button>
         </div>
         <div className="lyrics-layout">
           <div className="lyrics-pane">
@@ -820,6 +824,18 @@ function LyricsBlock({
             </div>
           </aside>
         </div>
+      {confirmReset ? (
+        <div className="leave-modal" role="dialog" aria-modal="true">
+          <div className="leave-card">
+            <h2>Reset these lyrics?</h2>
+            <p>This deletes the lines for this song. This cannot be undone.</p>
+            <div className="actions">
+              <button type="button" className="primary" onClick={() => setConfirmReset(false)}>Cancel</button>
+              <button type="button" className="ghost" onClick={() => { setConfirmReset(false); onReset(); }}>Reset</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       </section>
     );
   }
@@ -831,7 +847,7 @@ function LyricsBlock({
         <button type="button" className="lyrics-add" onClick={addLine}>Add line</button>
         <button type="button" className="lyrics-save" onClick={save} disabled={!dirty}>Save</button>
         <button type="button" className="lyrics-submit" onClick={submit}>Submit</button>
-        <button type="button" className="lyrics-reset" onClick={onReset}>Reset</button>
+        <button type="button" className="lyrics-reset" onClick={() => setConfirmReset(true)}>Reset</button>
       </div>
       <div className="lyrics-layout">
         <div className="lyrics-editor">
@@ -922,6 +938,18 @@ function LyricsBlock({
           </div>
         </div>
       </div>
+      {confirmReset ? (
+        <div className="leave-modal" role="dialog" aria-modal="true">
+          <div className="leave-card">
+            <h2>Reset these lyrics?</h2>
+            <p>This deletes the lines for this song. This cannot be undone.</p>
+            <div className="actions">
+              <button type="button" className="primary" onClick={() => setConfirmReset(false)}>Cancel</button>
+              <button type="button" className="ghost" onClick={() => { setConfirmReset(false); onReset(); }}>Reset</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -2285,6 +2313,22 @@ function Home() {
                   flushLibrarySave();
                 }}
                 onDirtyChange={setLyricsDirty}
+                onEdit={() => {
+                  setSongs((prev) => {
+                    const next = prev.map((item) => {
+                      if (item.id !== selected.id || !item.lyrics?.startsWith("{")) return item;
+                      try {
+                        const parsed = JSON.parse(item.lyrics) as { lines?: unknown };
+                        return { ...item, lyrics: JSON.stringify({ v: 12, lines: parsed.lines ?? [] }) };
+                      } catch {
+                        return item;
+                      }
+                    });
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+                    return next;
+                  });
+                  flushLibrarySave();
+                }}
                 onReset={() => {
                   setSongs((prev) => {
                     const next = prev.map((item) => item.id === selected.id ? { ...item, geniusUrl: undefined, lyrics: undefined } : item);
