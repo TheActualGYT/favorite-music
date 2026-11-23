@@ -556,473 +556,6 @@ function SoftPhoto({ src, className, style }: { src: string; className?: string;
   );
 }
 
-type LyricLine = { text: string; english?: string; members: string[] };
-type LyricsData = { v: 12; lines: LyricLine[]; members?: { name: string; lines: number; words: number }[] };
-
-function normalizeLyrics(raw?: string): LyricsData {
-  if (!raw?.startsWith("{")) return { v: 12, lines: [] };
-  try {
-    const parsed = JSON.parse(raw) as { v?: number; lines?: { text?: string; english?: string; members?: string[] }[] };
-    if (parsed.v !== 12 || !Array.isArray(parsed.lines)) return { v: 12, lines: [] };
-    return {
-      v: 12,
-      lines: parsed.lines.map((line) => ({
-        text: line.text || "",
-        english: line.english,
-        members: Array.isArray(line.members) ? line.members.slice(0, 2) : [],
-      })),
-      members: Array.isArray((parsed as { members?: { name: string; lines: number; words: number }[] }).members)
-        ? (parsed as { members: { name: string; lines: number; words: number }[] }).members
-        : undefined,
-    };
-  } catch {
-    return { v: 12, lines: [] };
-  }
-}
-
-function artistMembers(artist: string): string[] {
-  const key = artist.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const preset = GROUP_PROFILES[key];
-  if (preset?.length) return preset.map((member) => member.name);
-  try {
-    const roster = JSON.parse(localStorage.getItem("gyt-group-roster") || "{}") as Record<string, { name: string }[]>;
-    if (roster[key]?.length) return roster[key].map((member) => member.name);
-  } catch {
-    /* ignore */
-  }
-  return [];
-}
-
-function LyricsBlock({
-  text,
-  artist = "",
-  onSave,
-  onReset,
-  onEdit,
-  onDirtyChange,
-}: {
-  text?: string;
-  artist?: string;
-  onSave: (lyrics: string) => void;
-  onReset: () => void;
-  onEdit?: () => void;
-  onDirtyChange?: (dirty: boolean) => void;
-}) {
-  const saved = normalizeLyrics(text);
-  const [draft, setDraft] = useState<LyricsData>(saved);
-  const [english, setEnglish] = useState(false);
-  const [englishLines, setEnglishLines] = useState<string[] | null>(null);
-  const [translateError, setTranslateError] = useState("");
-  const [translating, setTranslating] = useState(false);
-  const [confirmReset, setConfirmReset] = useState(false);
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const openBtn = useRef<HTMLButtonElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const [rosterTick, setRosterTick] = useState(0);
-  useEffect(() => {
-    const bump = () => setRosterTick((value) => value + 1);
-    window.addEventListener("gyt-roster", bump);
-    return () => window.removeEventListener("gyt-roster", bump);
-  }, []);
-  useEffect(() => {
-    if (openIndex === null) return;
-    const place = () => {
-      const btn = openBtn.current;
-      if (!btn) return;
-      const rect = btn.getBoundingClientRect();
-      setMenuPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 180) });
-    };
-    place();
-    const onScroll = () => place();
-    const onDown = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (openBtn.current?.contains(target) || menuRef.current?.contains(target)) return;
-      setOpenIndex(null);
-      setMenuPos(null);
-    };
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll);
-    document.addEventListener("mousedown", onDown);
-    return () => {
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll);
-      document.removeEventListener("mousedown", onDown);
-    };
-  }, [openIndex]);
-  void rosterTick;
-  useEffect(() => setDraft(normalizeLyrics(text)), [text]);
-  const available = artistMembers(artist);
-  const data = draft;
-  const submitted = Boolean(data.members?.length);
-  const dirty = JSON.stringify(data.lines) !== JSON.stringify(saved.lines) || Boolean(data.members) !== Boolean(saved.members);
-  useEffect(() => onDirtyChange?.(dirty), [dirty]);
-  const persist = (next: LyricsData) => onSave(JSON.stringify(next));
-  const showEnglish = async () => {
-    if (english) {
-      setEnglish(false);
-      return;
-    }
-    setEnglish(true);
-    setTranslateError("");
-    const ready = data.lines.every((line) => !/[가-힣]/.test(line.text) || (line.english && line.english !== line.text));
-    if (ready && data.lines.some((line) => line.english && line.english !== line.text)) {
-      setEnglishLines(data.lines.map((line) => line.english || line.text));
-      return;
-    }
-    setTranslating(true);
-    try {
-      const res = await fetch("/api/translate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ lines: data.lines.map((line) => line.text) }),
-      });
-      const result = (await res.json()) as { english?: string[]; error?: string };
-      if (!res.ok || !result.english || result.english.length !== data.lines.length) {
-        throw new Error(result.error || "Translation failed");
-      }
-      const changed = result.english.some((line, index) => line !== data.lines[index].text);
-      if (!changed) throw new Error("Translation failed");
-      setEnglishLines(result.english);
-      const next = {
-        v: 12 as const,
-        lines: data.lines.map((line, index) => ({ ...line, english: result.english?.[index] || line.text })),
-        members: data.members,
-      };
-      setDraft(next);
-      persist(next);
-    } catch {
-      setEnglish(false);
-      setTranslateError("Couldn't translate these lyrics. Try again.");
-    } finally {
-      setTranslating(false);
-    }
-  };
-  const setLine = (index: number, patch: Partial<LyricLine>) => {
-    setDraft((current) => ({
-      ...current,
-      members: undefined,
-      lines: current.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
-    }));
-  };
-  const addLine = () => {
-    setDraft((current) => ({ ...current, members: undefined, lines: [...current.lines, { text: "", members: [] }] }));
-  };
-  const removeLine = (index: number) => {
-    setDraft((current) => ({ ...current, members: undefined, lines: current.lines.filter((_, i) => i !== index) }));
-  };
-  const toggleMember = (index: number, name: string) => {
-    const current = data.lines[index].members;
-    if (name === "ALL") {
-      setLine(index, { members: current.includes("ALL") ? [] : ["ALL"] });
-      return;
-    }
-    const withoutAll = current.filter((member) => member !== "ALL");
-    const has = withoutAll.includes(name);
-    let next: string[];
-    if (has) next = withoutAll.filter((member) => member !== name);
-    else if (withoutAll.length < 2) next = [...withoutAll, name];
-    else next = [withoutAll[1], name];
-    setLine(index, { members: next });
-  };
-  const matchMember = (label: string) => {
-    const key = label.toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (key === "all") return "ALL";
-    return available.find((name) => name.toLowerCase().replace(/[^a-z0-9]/g, "") === key) || label.trim();
-  };
-  const parseRow = (row: string, fallback: string[]) => {
-    let rest = row.trim().replace(/^[【［\[]/, "[").replace(/[】］\]]$/, "]");
-    rest = rest.replace(/【/g, "[").replace(/】/g, "]").replace(/［/g, "[").replace(/］/g, "]");
-    const members: string[] = [];
-    const takeTag = () => {
-      const match = rest.match(/^\[([^\]]+)\]\s*(.*)$/);
-      if (!match) return null;
-      rest = match[2];
-      return match[1].replace(/[,:;]+$/g, "").trim();
-    };
-    const first = takeTag();
-    if (!first) return { text: row.trim(), members: fallback, tagged: false };
-    const firstParts = first.split(/\s*(?:&|and|\+)\s*/i).map((part) => part.trim()).filter(Boolean).slice(0, 2);
-    members.push(...firstParts.map(matchMember));
-    if (members.length < 2 && rest.startsWith("[")) {
-      const next = rest.match(/^\[([^\]]+)\]\s*(.*)$/);
-      const nextKey = next?.[1].toLowerCase().replace(/[^a-z0-9]/g, "") || "";
-      const isMember = nextKey === "all" || available.some((name) => name.toLowerCase().replace(/[^a-z0-9]/g, "") === nextKey);
-      if (isMember && next && next[2].trim()) {
-        members.push(matchMember(next[1]));
-        rest = next[2];
-      }
-    }
-    const wrapped = rest.match(/^\[([\s\S]+)\]\s*$/);
-    return { text: (wrapped ? wrapped[1] : rest).trim(), members: members.slice(0, 2), tagged: true };
-  };
-  const parseBlock = (raw: string, fallback: string[]) => {
-    const rows = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").map((row) => row.trim()).filter(Boolean);
-    const parsed: { text: string; members: string[] }[] = [];
-    let pending: string[] | null = null;
-    for (const row of rows) {
-      const line = parseRow(row, fallback);
-      if (line.tagged && !line.text) {
-        pending = line.members;
-        continue;
-      }
-      parsed.push({ text: line.text, members: !line.tagged && pending ? pending : line.members });
-      pending = null;
-    }
-    if (pending) parsed.push({ text: "", members: pending });
-    return parsed;
-  };
-  const pasteAt = (index: number, raw: string) => {
-    const parsed = parseBlock(raw, data.lines[index]?.members ?? []);
-    if (!parsed.length) return;
-    setDraft((current) => {
-      const lines = [...current.lines];
-      lines.splice(index, 1, ...parsed);
-      return { v: 12, lines };
-    });
-  };
-
-  const submit = () => {
-    const stats = new Map<string, { lines: number; words: number }>();
-    for (const line of data.lines) {
-      const words = line.text.trim() ? line.text.trim().split(/\s+/).length : 0;
-      const names = line.members.includes("ALL") ? available : line.members.filter((name) => name !== "ALL");
-      for (const name of names) {
-        const current = stats.get(name) ?? { lines: 0, words: 0 };
-        current.lines += 1;
-        current.words += words;
-        stats.set(name, current);
-      }
-    }
-    const members = [...stats.entries()]
-      .filter(([name]) => name !== "ALL")
-      .sort((a, b) => b[1].lines - a[1].lines || b[1].words - a[1].words)
-      .map(([name, value]) => ({ name, ...value }));
-    const next = { v: 12 as const, lines: data.lines, members };
-    setDraft(next);
-    persist(next);
-    setOpenIndex(null);
-  };
-  const save = () => persist({ v: 12, lines: data.lines });
-  const ranked = data.members ?? [];
-
-  if (data.lines.length === 0) {
-    return (
-      <section className="lyrics">
-        <div className="lyrics-top">
-          <div className="lyrics-head">Lyrics</div>
-        </div>
-        <div className="lyrics-empty">
-          <p>No lyrics yet.</p>
-          <button type="button" onClick={addLine}>Add first line</button>
-        </div>
-      </section>
-    );
-  }
-
-  if (submitted) {
-    const bias = nameKey(loadBias()[nameKey(artist)] || "");
-    return (
-      <section className="lyrics">
-        <div className="lyrics-top">
-          <div className="lyrics-head">Lyrics</div>
-          <label className="lang-switch">
-            <span className={english ? "" : "is-on"}>KO</span>
-            <button type="button" className={english ? "is-english" : ""} onClick={showEnglish} aria-label="Toggle translation">
-              <span />
-            </button>
-            <span className={english ? "is-on" : ""}>{translating ? "…" : "EN"}</span>
-          </label>
-          <button type="button" className="lyrics-reset" onClick={() => onEdit?.()}>Edit</button>
-          <button type="button" className="lyrics-reset" onClick={() => setConfirmReset(true)}>Reset</button>
-        </div>
-        {translateError ? <p className="lyrics-note is-error">{translateError}</p> : null}
-        <div className="lyrics-layout">
-          <div className="lyrics-pane">
-            <div className="lyrics-text">
-              {data.lines.map((line, index) => {
-                const body = english ? (englishLines?.[index] || line.english || line.text) : line.text;
-                if (!body.trim()) return null;
-                return (
-                  <p key={index}>
-                    {line.members.length === 0 ? null : line.members.map((name, i) => (
-                      <span key={name}>
-                        {i > 0 ? <span className="lyric-plus"> + </span> : null}
-                        <span className="lyric-who" style={{ color: name === "ALL" ? "#ddd" : memberColor(artist, name, "#ccc") }}>[{name.toUpperCase()}]</span>
-                      </span>
-                    ))}
-                    <span>{body}</span>
-                  </p>
-                );
-              })}
-            </div>
-          </div>
-          <aside className="lyric-side">
-            <div className="lyric-key">
-              {ranked.map((member) => {
-                const color = memberColor(artist, member.name, "#ccc");
-                const shot = profileShot(artist, member.name);
-                const isBias = bias === nameKey(member.name);
-                return (
-                  <div key={member.name} className={isBias ? "member-box is-bias" : "member-box"} style={{ "--member": color } as CSSProperties}>
-                    <span className="member-photo-wrap">
-                      {shot?.photo ? (
-                        <SoftPhoto className="member-photo" src={shot.photo} style={{ objectPosition: `${shot.x}% ${shot.y}%`, transform: `scale(${shot.zoom})` }} />
-                      ) : (
-                        <span className="member-photo is-empty" />
-                      )}
-                    </span>
-                    <div>
-                      <div className="lyric-name-row">
-                        <div className="lyric-key-name" style={{ color }}>{member.name.toUpperCase()}</div>
-                        {isBias ? <span className="bias-mini">★</span> : null}
-                      </div>
-                      <div className="lyric-key-time">{member.lines} lines · {member.words} words</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </aside>
-        </div>
-      {confirmReset ? (
-        <div className="leave-modal" role="dialog" aria-modal="true">
-          <div className="leave-card">
-            <h2>Reset these lyrics?</h2>
-            <p>This deletes the lines for this song. This cannot be undone.</p>
-            <div className="actions">
-              <button type="button" className="primary" onClick={() => setConfirmReset(false)}>Cancel</button>
-              <button type="button" className="ghost" onClick={() => { setConfirmReset(false); onReset(); }}>Reset</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      </section>
-    );
-  }
-
-  return (
-    <section className="lyrics">
-      <div className="lyrics-top">
-        <div className="lyrics-head">Lyrics</div>
-        <button type="button" className="lyrics-add" onClick={addLine}>Add line</button>
-        <button type="button" className="lyrics-save" onClick={save} disabled={!dirty}>Save</button>
-        <button type="button" className="lyrics-submit" onClick={submit}>Submit</button>
-        <button type="button" className="lyrics-reset" onClick={() => setConfirmReset(true)}>Reset</button>
-      </div>
-      <div className="lyrics-layout">
-        <div className="lyrics-editor">
-          {data.lines.map((line, index) => {
-            const open = openIndex === index;
-            return (
-              <div className="lyric-row" key={index}>
-                <span className="lyric-num">{index + 1}</span>
-                <div className="lyric-who-select">
-                  <button
-                    type="button"
-                    className="lyric-who-btn"
-                    ref={open ? openBtn : undefined}
-                    onClick={(event) => {
-                      if (open) {
-                        setOpenIndex(null);
-                        setMenuPos(null);
-                        return;
-                      }
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      setMenuPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 180) });
-                      setOpenIndex(index);
-                    }}
-                  >
-                    {line.members.length === 0 ? (
-                      <span className="lyric-who-empty">Select</span>
-                    ) : (
-                      line.members.map((name, i) => (
-                        <span key={name}>
-                          {i > 0 ? <span className="lyric-plus"> + </span> : null}
-                          <span style={{ color: memberColor(artist, name, "#ccc") }}>[{name.toUpperCase()}]</span>
-                        </span>
-                      ))
-                    )}
-                  </button>
-                  {open && menuPos ? createPortal(
-                    <div ref={menuRef} className="lyric-who-menu" style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}>
-                      <button
-                        type="button"
-                        className={line.members.includes("ALL") ? "is-on" : ""}
-                        onClick={() => toggleMember(index, "ALL")}
-                      >
-                        <span style={{ color: "#ddd" }}>ALL</span>
-                        {line.members.includes("ALL") ? <span className="check">✓</span> : null}
-                      </button>
-                      {available.length === 0 ? (
-                        <div className="lyric-who-empty">No members loaded for this group</div>
-                      ) : (
-                        available.map((name) => {
-                          const selected = line.members.includes(name);
-                          return (
-                            <button
-                              key={name}
-                              type="button"
-                              className={selected ? "is-on" : ""}
-                              onClick={() => toggleMember(index, name)}
-                            >
-                              <span style={{ color: memberColor(artist, name, "#ccc") }}>{name}</span>
-                              {selected ? <span className="check">✓</span> : null}
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>,
-                    document.body,
-                  ) : null}
-                </div>
-                <input
-                  className="lyric-input"
-                  value={line.text}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    if (value.includes("\n")) {
-                      pasteAt(index, value);
-                      return;
-                    }
-                    setLine(index, { text: value });
-                  }}
-                  onPaste={(event) => {
-                    const raw = event.clipboardData.getData("text/plain") || event.clipboardData.getData("text");
-                    if (!raw.trim()) return;
-                    if (raw.includes("\n") || raw.includes("\r") || /^\s*\[[^\]]+\]/.test(raw)) {
-                      event.preventDefault();
-                      pasteAt(index, raw);
-                    }
-                  }}
-                  placeholder="Lyric line, or paste [MEMBER] lines"
-                />
-                <button type="button" className="lyric-remove" onClick={() => removeLine(index)} aria-label="Remove line">×</button>
-              </div>
-            );
-          })}
-        </div>
-        <div className="lyric-side">
-          <div className="lyric-key">
-            <p className="lyrics-note">Submit to count lines and words.</p>
-          </div>
-        </div>
-      </div>
-      {confirmReset ? (
-        <div className="leave-modal" role="dialog" aria-modal="true">
-          <div className="leave-card">
-            <h2>Reset these lyrics?</h2>
-            <p>This deletes the lines for this song. This cannot be undone.</p>
-            <div className="actions">
-              <button type="button" className="primary" onClick={() => setConfirmReset(false)}>Cancel</button>
-              <button type="button" className="ghost" onClick={() => { setConfirmReset(false); onReset(); }}>Reset</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </section>
-  );
-}
 
 type ProfileInfo = { name: string; born: string; role: string; country: string; flag: string; photo: string };
 
@@ -1564,8 +1097,6 @@ function Home() {
   const [view, setView] = useState<View>("top-songs");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [lyricsDirty, setLyricsDirty] = useState(false);
-  const [leavePrompt, setLeavePrompt] = useState<null | (() => void)>(null);
   const [groupName, setGroupName] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [thoughtsOpen, setThoughtsOpen] = useState(false);
@@ -1580,23 +1111,6 @@ function Home() {
   const companyTried = useRef(new Set<number>());
   const [fact, setFact] = useState<{ field: "album" | "releaseDate" | "company" | "listPoints" | "duration"; value: string } | null>(null);
   useEffect(() => setFact(null), [selectedId]);
-  useEffect(() => setLyricsDirty(false), [selectedId]);
-  useEffect(() => {
-    if (!lyricsDirty) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [lyricsDirty]);
-  const requestLeave = (go: () => void) => {
-    if (!lyricsDirty) {
-      go();
-      return;
-    }
-    setLeavePrompt(() => go);
-  };
 
   useEffect(() => {
     let dead = false;
@@ -2107,18 +1621,16 @@ function Home() {
                     className={selected ? "row is-selected" : "row"}
                     role="button"
                     tabIndex={0}
-                    onClick={() => requestLeave(() => {
+                    onClick={() => {
                       setSelectedId(song.id);
                       setGroupName(null);
                       setEditing(false);
-                    })}
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        requestLeave(() => {
-                          setSelectedId(song.id);
-                          setGroupName(null);
-                        });
+                        setSelectedId(song.id);
+                        setGroupName(null);
                       }
                     }}
                   >
@@ -2166,10 +1678,10 @@ function Home() {
                     key={row.name}
                     type="button"
                     className={groupName === row.name ? "row is-selected" : "row"}
-                    onClick={() => requestLeave(() => {
+                    onClick={() => {
                       setGroupName(row.name);
                       setSelectedId(null);
-                    })}
+                    }}
                   >
                     <div className="row-title">{row.name}</div>
                     <div className="row-sub">
@@ -2191,10 +1703,10 @@ function Home() {
                     key={row.name}
                     type="button"
                     className={groupName === row.name ? "row is-selected" : "row"}
-                    onClick={() => requestLeave(() => {
+                    onClick={() => {
                       setGroupName(row.name);
                       setSelectedId(null);
-                    })}
+                    }}
                   >
                     <div className="row-title">{row.name}</div>
                     <div className="row-sub">
@@ -2368,46 +1880,6 @@ function Home() {
                   />
                 </div>
               ) : null}
-              <LyricsBlock
-                text={selected.lyrics}
-                artist={selected.artist}
-                onSave={(lyrics) => {
-                  setSongs((prev) => {
-                    const next = prev.map((item) =>
-                      item.id === selected.id ? { ...item, geniusUrl: undefined, lyrics } : item,
-                    );
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-                    return next;
-                  });
-                  setLyricsDirty(false);
-                  flushLibrarySave();
-                }}
-                onDirtyChange={setLyricsDirty}
-                onEdit={() => {
-                  setSongs((prev) => {
-                    const next = prev.map((item) => {
-                      if (item.id !== selected.id || !item.lyrics?.startsWith("{")) return item;
-                      try {
-                        const parsed = JSON.parse(item.lyrics) as { lines?: unknown };
-                        return { ...item, lyrics: JSON.stringify({ v: 12, lines: parsed.lines ?? [] }) };
-                      } catch {
-                        return item;
-                      }
-                    });
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-                    return next;
-                  });
-                  flushLibrarySave();
-                }}
-                onReset={() => {
-                  setSongs((prev) => {
-                    const next = prev.map((item) => item.id === selected.id ? { ...item, geniusUrl: undefined, lyrics: undefined } : item);
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-                    return next;
-                  });
-                  flushLibrarySave();
-                }}
-              />
               <GroupProfile artist={selected.artist} />
             </article>
             )
@@ -2416,14 +1888,14 @@ function Home() {
               title={groupName}
               subtitle="Artist"
               songs={artistRows.find((r) => r.name === groupName)?.items ?? []}
-              onOpen={(id) => requestLeave(() => setSelectedId(id))}
+              onOpen={(id) => setSelectedId(id)}
             />
           ) : groupName ? (
             <GroupDetail
               title={groupName}
               subtitle="Album"
               songs={albumRows.find((r) => r.name === groupName)?.items ?? []}
-              onOpen={(id) => requestLeave(() => setSelectedId(id))}
+              onOpen={(id) => setSelectedId(id)}
             />
           ) : (
             <div className="placeholder">Select something from the list to view details</div>
@@ -2431,23 +1903,6 @@ function Home() {
         </main>
       </div>
 
-      {leavePrompt ? (
-        <div className="leave-modal" role="dialog" aria-modal="true">
-          <div className="leave-card">
-            <h2>Leave without saving?</h2>
-            <p>You have unsaved lyric changes. Leave this page and lose them, or stay and save first.</p>
-            <div className="actions">
-              <button type="button" className="primary" onClick={() => setLeavePrompt(null)}>Stay</button>
-              <button type="button" className="ghost" onClick={() => {
-                const go = leavePrompt;
-                setLeavePrompt(null);
-                setLyricsDirty(false);
-                go();
-              }}>Leave</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
       {adding ? (
         <AddModal
           nextPosition={songs.length + 1}
