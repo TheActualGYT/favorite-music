@@ -1118,6 +1118,90 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
 }
 
 
+function GridPulse({ color }: { color: string }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const colorRef = useRef(color);
+  colorRef.current = color;
+  useEffect(() => {
+    const canvas = ref.current;
+    const parent = canvas?.parentElement;
+    if (!canvas || !parent) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    let dead = false;
+    let frame = 0;
+    type Cell = { col: number; row: number; age: number; dur: number };
+    const cells: Cell[] = [];
+    const size = () => {
+      const width = parent.clientWidth;
+      const height = parent.clientHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.max(1, Math.floor(width * dpr));
+      canvas.height = Math.max(1, Math.floor(height * dpr));
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    const place = () => {
+      const cols = Math.max(1, Math.ceil(parent.clientWidth / 40));
+      const viewTop = Math.floor(parent.scrollTop / 40);
+      const viewRows = Math.max(1, Math.ceil(parent.clientHeight / 40));
+      const used = new Set(cells.map((cell) => `${cell.col}:${cell.row}`));
+      for (let tries = 0; tries < 12; tries += 1) {
+        const col = Math.floor(Math.random() * cols);
+        const row = viewTop + Math.floor(Math.random() * viewRows);
+        const key = `${col}:${row}`;
+        if (used.has(key)) continue;
+        cells.push({ col, row, age: Math.random() * 0.2, dur: 1.8 + Math.random() * 2.4 });
+        return true;
+      }
+      return false;
+    };
+    size();
+    const observer = new ResizeObserver(size);
+    observer.observe(parent);
+    let last = performance.now();
+    const draw = (now: number) => {
+      if (dead) return;
+      frame = window.requestAnimationFrame(draw);
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      if (document.hidden) return;
+      const width = parent.clientWidth;
+      const height = parent.clientHeight;
+      const scroll = parent.scrollTop;
+      canvas.style.transform = `translateY(${scroll}px)`;
+      while (cells.length < 9) {
+        if (!place()) break;
+      }
+      ctx.clearRect(0, 0, width, height);
+      for (let i = cells.length - 1; i >= 0; i -= 1) {
+        const cell = cells[i];
+        cell.age += dt / cell.dur;
+        if (cell.age >= 1) {
+          cells.splice(i, 1);
+          continue;
+        }
+        const y = cell.row * 40 - scroll;
+        const x = cell.col * 40;
+        if (y < -40 || y > height || x > width) continue;
+        const alpha = Math.sin(cell.age * Math.PI) * 0.42;
+        ctx.fillStyle = colorRef.current;
+        ctx.globalAlpha = alpha;
+        ctx.fillRect(x + 1, y + 1, 38, 38);
+      }
+      ctx.globalAlpha = 1;
+    };
+    frame = window.requestAnimationFrame(draw);
+    return () => {
+      dead = true;
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, []);
+  return <canvas ref={ref} className="grid-pulse" aria-hidden="true" />;
+}
+
 function Home() {
   const [songs, setSongs] = useState<Song[]>([]);
   const [view, setView] = useState<View>("top-songs");
@@ -1759,6 +1843,7 @@ function Home() {
             scrollIdle.current = window.setTimeout(() => shell.classList.remove("is-scrolling"), 140);
           }}
         >
+          {selected ? <GridPulse color={coverColor} /> : null}
           {selected ? (
             editing ? (
               <SongForm
