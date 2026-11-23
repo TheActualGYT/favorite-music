@@ -395,8 +395,8 @@
   top: 50%;
   left: 50%;
   right: auto;
-  width: 124cqw;
-  height: calc(124cqw * 9 / 16);
+  width: 160cqw;
+  height: 160cqw;
   max-width: none;
   aspect-ratio: auto;
   object-fit: cover;
@@ -667,7 +667,7 @@
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: -0.04em;
-  text-transform: capitalize;
+  text-transform: none;
 }
 
 .detail .byline {
@@ -1317,6 +1317,40 @@
 .lyric-key-time { margin-top: 0.05rem; color: #9a9a9a; font-size: 0.7rem; line-height: 1.15; }
 .member-photo-wrap { width: 42px; height: 42px; flex: none; overflow: hidden; border: 1.5px solid #fff; border-radius: 50%; background: #333; }
 .member-photo, .member-photo.is-empty { width: 100%; height: 100%; display: block; object-fit: cover; transform-origin: center; }
+
+.lyrics-empty { display: grid; gap: 0.6rem; padding: 1.2rem 0.2rem; color: #aaa; }
+.lyric-paste-box {
+  width: 100%;
+  min-height: 5.5rem;
+  margin-top: 0.3rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 0.55rem;
+  background: #141414;
+  color: #eee;
+  font: inherit;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+.lyrics-empty button,
+.lyrics-add { border: 1px solid rgba(255,255,255,0.28); border-radius: 999px; background: transparent; color: #eee; font: inherit; font-size: 0.75rem; padding: 0.32rem 0.85rem; cursor: pointer; }
+.lyrics-add { margin-left: auto; }
+.lyrics-editor { display: flex; flex-direction: column; gap: 0.35rem; max-height: 28rem; overflow-y: auto; padding-right: 0.2rem; }
+.lyric-row { display: grid; grid-template-columns: 2.2rem 11.5rem minmax(0, 1fr) 1.6rem; align-items: center; gap: 0.4rem; }
+.lyric-num { color: #888; font-size: 0.75rem; font-weight: 650; text-align: right; }
+.lyric-who-select { position: relative; }
+.lyric-who-btn { width: 100%; min-height: 2rem; padding: 0.25rem 0.45rem; border: 1px solid rgba(255,255,255,0.22); border-radius: 0.45rem; background: #1c1c1c; color: #ccc; font: inherit; font-size: 0.72rem; text-align: left; cursor: pointer; }
+.lyric-who-btn .lyric-who-empty { color: #777; }
+.lyric-plus { color: #888; }
+.lyric-who-menu { position: absolute; top: calc(100% + 0.2rem); left: 0; z-index: 40; min-width: 12rem; max-height: 16rem; overflow-y: auto; border-radius: 0.55rem; background: #1a1a1a; box-shadow: 0 0 0 1px rgba(255,255,255,0.1), 0 12px 32px rgba(0,0,0,0.5); }
+.lyric-who-menu button { display: flex; width: 100%; align-items: center; justify-content: space-between; padding: 0.45rem 0.7rem; border: 0; background: transparent; color: #eee; font: inherit; font-size: 0.8rem; text-align: left; cursor: pointer; }
+.lyric-who-menu button:hover,
+.lyric-who-menu button.is-on { background: #2a2a2a; }
+.lyric-who-menu .check { color: #fff; }
+.lyric-who-done { border-top: 1px solid rgba(255,255,255,0.08) !important; color: #aaa !important; }
+.lyric-input { min-width: 0; border: 1px solid rgba(255,255,255,0.18); border-radius: 0.45rem; padding: 0.4rem 0.55rem; background: #141414; color: #eee; font: inherit; font-size: 0.88rem; }
+.lyric-remove { width: 1.6rem; height: 1.6rem; border: 0; border-radius: 0.4rem; background: transparent; color: #888; font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.lyric-remove:hover { color: #fff; background: #333; }
 
 .lyrics-note { margin: 0.35rem 0 0; color: #9a9a9a; font-size: 0.85rem; }
 .lyrics-note a { color: #d6ccff; }

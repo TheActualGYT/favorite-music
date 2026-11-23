@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { getSpotifyStreams } from "../lib/spotify";
-import { getLyrics, englishFromSource, findLyrics } from "../lib/lyrics";
 import { getCompany } from "../lib/company";
 import { getGroup, getIdolPhoto } from "../lib/group";
 
@@ -511,69 +510,6 @@ function saveStore(key: string, artist: string, name: string, crop: Crop) {
   return all;
 }
 
-function cleanLyric(value?: string) {
-  if (!value) return "";
-  let text = value.replace(/<[^>]+>/g, "");
-  for (let pass = 0; pass < 2; pass += 1) {
-    const next = text
-      .replace(/&amp;/g, "&")
-      .replace(/&#8216;|&#8217;|&#39;|&rsquo;|&lsquo;|&apos;/g, "'")
-      .replace(/&#8220;|&#8221;|&quot;|&ldquo;|&rdquo;/g, '"')
-      .replace(/&nbsp;/g, " ")
-      .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-      .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)));
-    if (next === text) break;
-    text = next;
-  }
-  return text.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/\s+/g, " ").trim();
-}
-
-const PASTE_COLORS = ["#ff3b30", "#ff8a1e", "#f5d000", "#3dcc6a", "#00ffff", "#3aa8e6", "#a855f7", "#ff4d9a"];
-
-function parsePastedLyrics(raw: string, artist: string) {
-  const lines: { who: string; color: string; korean: string; english: string }[] = [];
-  const members = new Map<string, { name: string; color: string; lines: number; words: number }>();
-  let colorAt = 0;
-  const colorFor = (name: string) => {
-    const existing = members.get(name);
-    if (existing) return existing.color;
-    const preset = MEMBER_COLORS[name.toLowerCase().replace(/[^a-z0-9]/g, "")];
-    if (preset) return preset;
-    const next = PASTE_COLORS[colorAt % PASTE_COLORS.length];
-    colorAt += 1;
-    return next;
-  };
-  for (const row of raw.split(/\r?\n/)) {
-    const match = row.trim().match(/^\[([^\]]+)\]\s*(.*)$/);
-    if (!match) continue;
-    const label = match[1].replace(/[,:;]+$/g, "").trim().toUpperCase();
-    const body = cleanLyric(match[2]);
-    if (!label || !body) continue;
-    const parts = label === "ALL" ? ["ALL"] : label.split(/\s*(?:&|and)\s*/i).map((part) => part.replace(/[,:;]+$/g, "").trim()).filter(Boolean);
-    const who = parts.length > 1 ? parts.join(" & ") : parts[0];
-    const color = colorFor(parts[0]);
-    lines.push({ who, color, korean: body, english: body });
-    for (const name of parts) {
-      if (name === "ALL") continue;
-      const current = members.get(name);
-      const words = body.split(/\s+/).filter(Boolean).length;
-      if (current) {
-        current.lines += 1;
-        current.words += words;
-      } else {
-        members.set(name, { name, color: colorFor(name), lines: 1, words });
-      }
-    }
-  }
-  if (lines.length < 2) return null;
-  return {
-    v: 11,
-    source: "pasted",
-    lines,
-    members: [...members.values()].sort((a, b) => b.lines - a.lines || b.words - a.words),
-  };
-}
-
 const PHOTO_CACHE = new Map<string, string>();
 
 function SoftPhoto({ src, className, style }: { src: string; className?: string; style?: CSSProperties }) {
@@ -620,292 +556,244 @@ function SoftPhoto({ src, className, style }: { src: string; className?: string;
   );
 }
 
+type LyricLine = { text: string; english?: string; members: string[] };
+type LyricsData = { v: 12; lines: LyricLine[] };
+
+function normalizeLyrics(raw?: string): LyricsData {
+  if (!raw?.startsWith("{")) return { v: 12, lines: [] };
+  try {
+    const parsed = JSON.parse(raw) as { v?: number; lines?: { text?: string; english?: string; members?: string[] }[] };
+    if (parsed.v !== 12 || !Array.isArray(parsed.lines)) return { v: 12, lines: [] };
+    return {
+      v: 12,
+      lines: parsed.lines.map((line) => ({
+        text: line.text || "",
+        english: line.english,
+        members: Array.isArray(line.members) ? line.members.slice(0, 2) : [],
+      })),
+    };
+  } catch {
+    return { v: 12, lines: [] };
+  }
+}
+
+function artistMembers(artist: string): string[] {
+  const key = artist.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const preset = GROUP_PROFILES[key];
+  if (preset?.length) return preset.map((member) => member.name);
+  try {
+    const roster = JSON.parse(localStorage.getItem("gyt-group-roster") || "{}") as Record<string, { name: string }[]>;
+    if (roster[key]?.length) return roster[key].map((member) => member.name);
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
+
 function LyricsBlock({
   text,
   artist = "",
+  onChange,
   onReset,
-  onTranslated,
-  onLoad,
-  onPaste,
 }: {
   text?: string;
   artist?: string;
+  onChange: (lyrics: string) => void;
   onReset: () => void;
-  onTranslated?: (lines: string[]) => void;
-  onLoad: (url: string) => Promise<boolean>;
-  onPaste?: (raw: string) => boolean;
 }) {
-  const [english, setEnglish] = useState(false);
-  const [crops, setCrops] = useState<Record<string, Crop>>({});
-  const [englishLines, setEnglishLines] = useState<string[] | null>(null);
-  const [idolPhotos, setIdolPhotos] = useState<Record<string, string>>({});
+  const data = normalizeLyrics(text);
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [rosterTick, setRosterTick] = useState(0);
-  const [sourceUrl, setSourceUrl] = useState("");
-  const [sourceError, setSourceError] = useState("");
-  const [sourceBusy, setSourceBusy] = useState(false);
-  const [pasteText, setPasteText] = useState("");
-  const [pasteError, setPasteError] = useState("");
-  useEffect(() => setCrops(loadStore(CROP_KEY)), [text]);
-  useEffect(() => setIdolPhotos(loadIdolPhotos()), [text]);
   useEffect(() => {
     const bump = () => setRosterTick((value) => value + 1);
     window.addEventListener("gyt-roster", bump);
     return () => window.removeEventListener("gyt-roster", bump);
   }, []);
-  useEffect(() => {
-    if (!text?.startsWith("{")) {
-      setEnglishLines(null);
+  void rosterTick;
+  const available = artistMembers(artist);
+  const update = (next: LyricsData) => onChange(JSON.stringify(next));
+  const setLine = (index: number, patch: Partial<LyricLine>) => {
+    const lines = data.lines.map((line, i) => (i === index ? { ...line, ...patch } : line));
+    update({ v: 12, lines });
+  };
+  const addLine = () => {
+    update({ v: 12, lines: [...data.lines, { text: "", members: [] }] });
+  };
+  const removeLine = (index: number) => {
+    update({ v: 12, lines: data.lines.filter((_, i) => i !== index) });
+  };
+  const toggleMember = (index: number, name: string) => {
+    const current = data.lines[index].members;
+    if (name === "ALL") {
+      setLine(index, { members: current.includes("ALL") ? [] : ["ALL"] });
       return;
     }
-    let parsed: { source?: string; lines?: { korean?: string; text?: string; english?: string }[] };
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      setEnglishLines(null);
-      return;
-    }
-    const lines = (parsed.lines ?? []).map((line) => line.korean || line.text || "");
-    const ready = lines.map((line, index) => {
-      const stored = parsed.lines?.[index]?.english;
-      if (stored && stored !== line) return stored;
-      return /[가-힣]/.test(line) ? "" : line;
+    const withoutAll = current.filter((member) => member !== "ALL");
+    const has = withoutAll.includes(name);
+    let next: string[];
+    if (has) next = withoutAll.filter((member) => member !== name);
+    else if (withoutAll.length < 2) next = [...withoutAll, name];
+    else next = [withoutAll[1], name];
+    setLine(index, { members: next });
+  };
+  const pasteAt = (index: number, raw: string) => {
+    const rows = raw.replace(/\r\n/g, "\n").split("\n").map((row) => row.trim()).filter(Boolean);
+    if (rows.length === 0) return;
+    const parsed = rows.map((row) => {
+      const tagged = row.match(/^\[([^\]]+)\]\s*(.*)$/);
+      if (!tagged) return { text: row, members: data.lines[index]?.members ?? [] };
+      const label = tagged[1].replace(/[,:;]+$/g, "").trim();
+      const parts = label.toUpperCase() === "ALL"
+        ? ["ALL"]
+        : label.split(/\s*(?:&|and|\+)\s*/i).map((part) => part.trim()).filter(Boolean).slice(0, 2);
+      return { text: tagged[2], members: parts };
     });
-    if (ready.every(Boolean)) {
-      setEnglishLines(ready);
-      return;
-    }
-    if (!parsed.source) {
-      setEnglishLines(null);
-      return;
-    }
-    let dead = false;
-    setEnglishLines(null);
-    englishFromSource({ data: { source: parsed.source, lines } })
-      .then((result) => {
-        if (dead || result.length !== lines.length) return;
-        setEnglishLines(result);
-        if (result.some((line, index) => line !== lines[index])) onTranslated?.(result);
-      })
-      .catch(() => {
-        if (!dead) setEnglishLines(null);
-      });
-    return () => {
-      dead = true;
-    };
-  }, [text]);
-  useEffect(() => {
-    if (!text?.startsWith("{")) return;
-    let members: { name: string; photo?: string }[] = [];
-    try {
-      members = JSON.parse(text).members ?? [];
-    } catch {
-      return;
-    }
-    const saved = loadIdolPhotos();
-    const missing = members.filter((member) => !member.photo && !profileShot(artist, member.name) && !saved[nameKey(member.name)]);
-    if (!missing.length) return;
-    let dead = false;
-    (async () => {
-      const next = { ...saved };
-      for (const member of missing.slice(0, 8)) {
-        const photo = await getIdolPhoto({ data: { name: member.name.replace(/[,:;]+$/g, "") } });
-        if (photo) next[nameKey(member.name)] = photo;
-      }
-      if (dead) return;
-      localStorage.setItem(IDOL_PHOTO_KEY, JSON.stringify(next));
-      setIdolPhotos(next);
-    })();
-    return () => {
-      dead = true;
-    };
-  }, [text, artist]);
-  const loadSource = async (event: FormEvent) => {
-    event.preventDefault();
-    const next = sourceUrl.trim();
-    if (!next) return;
-    setSourceBusy(true);
-    setSourceError("");
-    try {
-      const ok = await onLoad(next);
-      if (!ok) setSourceError("Couldn't read lyrics from that page. Use the Color Coded Lyrics page, or the Genius page if it isn't there.");
-      else setSourceUrl("");
-    } catch {
-      setSourceError("Couldn't read lyrics from that page. Use the Color Coded Lyrics page, or the Genius page if it isn't there.");
-    } finally {
-      setSourceBusy(false);
-    }
+    const lines = [...data.lines];
+    lines.splice(index, 1, ...parsed);
+    update({ v: 12, lines });
   };
-  const submitPaste = (event: FormEvent) => {
-    event.preventDefault();
-    const raw = pasteText.trim();
-    if (!raw) return;
-    setPasteError("");
-    if (!onPaste?.(raw)) {
-      setPasteError("Paste lines like [KARINA] I go in all the way, one per line.");
-      return;
+
+  const memberStats = new Map<string, { lines: number; words: number }>();
+  for (const line of data.lines) {
+    const words = line.text.trim() ? line.text.trim().split(/\s+/).length : 0;
+    const names = line.members.includes("ALL") ? available : line.members.filter((name) => name !== "ALL");
+    for (const name of names) {
+      const current = memberStats.get(name) ?? { lines: 0, words: 0 };
+      current.lines += 1;
+      current.words += words;
+      memberStats.set(name, current);
     }
-    setPasteText("");
-  };
-  const pasteForm = (
-    <form className="lyric-paste" onSubmit={submitPaste}>
-      <p className="lyrics-note">
-        Or paste the correct version, one line per person: <code>[KARINA] I go in all the way</code>
-      </p>
-      <textarea
-        value={pasteText}
-        onChange={(event) => setPasteText(event.target.value)}
-        placeholder={"[KARINA] Woo\n[NINGNING] I go in all the way\n[ALL] I'll make it lemonade"}
-        rows={6}
-        spellCheck={false}
-      />
-      <button type="submit" disabled={!pasteText.trim()}>Use pasted lyrics</button>
-      {pasteError ? <p className="lyrics-note is-error">{pasteError}</p> : null}
-    </form>
-  );
-  const sourceForm = (
-    <form className="lyric-source" onSubmit={loadSource}>
-      <p className="lyrics-note">
-        Member colors come from <a href="https://colorcodedlyrics.com" target="_blank" rel="noreferrer">Color Coded Lyrics</a>.
-        If that site doesn't have the song, paste the <a href="https://genius.com" target="_blank" rel="noreferrer">Genius</a> page instead.
-      </p>
-      <div className="lyric-source-row">
-        <input
-          value={sourceUrl}
-          onChange={(event) => setSourceUrl(event.target.value)}
-          placeholder="Color Coded Lyrics or Genius link"
-          spellCheck={false}
-        />
-        <button type="submit" disabled={sourceBusy || !sourceUrl.trim()}>{sourceBusy ? "Loading…" : "Add lyrics"}</button>
-      </div>
-      {sourceError ? <p className="lyrics-note is-error">{sourceError}</p> : null}
-    </form>
-  );
-  if (!text) {
+  }
+  const ranked = [...memberStats.entries()].filter(([name]) => name !== "ALL").sort((a, b) => b[1].lines - a[1].lines || b[1].words - a[1].words);
+
+  if (data.lines.length === 0) {
     return (
-      <>
-        <div className="lyrics-head">Lyrics</div>
-        {sourceForm}
-        {pasteForm}
-      </>
+      <section className="lyrics">
+        <div className="lyrics-top">
+          <div className="lyrics-head">Lyrics</div>
+        </div>
+        <div className="lyrics-empty">
+          <p>No lyrics yet. Add a line, or paste several at once.</p>
+          <button type="button" onClick={addLine}>Add first line</button>
+          <textarea
+            className="lyric-paste-box"
+            placeholder="Paste multiple lines here (one per row)"
+            onPaste={(event) => {
+              const raw = event.clipboardData.getData("text");
+              if (!raw.trim()) return;
+              event.preventDefault();
+              const rows = raw.replace(/\r\n/g, "\n").split("\n").map((row) => row.trim()).filter(Boolean);
+              if (!rows.length) return;
+              update({ v: 12, lines: rows.map((row) => ({ text: row, members: [] })) });
+            }}
+          />
+        </div>
+      </section>
     );
   }
-  let parsed: {
-    source?: string;
-    lines?: { who: string; color: string; english?: string; korean?: string; text?: string }[];
-    members?: { name: string; color: string; photo?: string; focus?: string; zoom?: number; lines: number; words?: number }[];
-  } | null = null;
-  if (text.startsWith("{")) {
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      parsed = null;
-    }
-  }
-  if (!parsed?.lines) return sourceForm;
+
   return (
-    <>
+    <section className="lyrics">
       <div className="lyrics-top">
         <div className="lyrics-head">Lyrics</div>
-        <label className="lang-switch">
-          <span className={!english ? "is-on" : ""}>Korean</span>
-          <button type="button" className={english ? "is-english" : ""} onClick={() => setEnglish((value) => !value)} aria-pressed={english}>
-            <span />
-          </button>
-          <span className={english ? "is-on" : ""}>English</span>
-        </label>
-        <div className="lyrics-edit">
-          <button type="button" className="lyrics-reset" tabIndex={0}>Edit</button>
-          <div className="lyrics-edit-panel">
-            <div className="lyrics-edit-card">
-              <button type="button" onClick={onReset}>Reset</button>
-              {parsed.source ? (
-                <a href={parsed.source} target="_blank" rel="noreferrer">Check source</a>
-              ) : null}
-              <form className="lyrics-replace" onSubmit={loadSource}>
-                <input
-                  value={sourceUrl}
-                  onChange={(event) => setSourceUrl(event.target.value)}
-                  placeholder="Color Coded Lyrics or Genius link"
-                  spellCheck={false}
-                />
-                <button type="submit" disabled={sourceBusy || !sourceUrl.trim()}>{sourceBusy ? "…" : "Use page"}</button>
-              </form>
-              {sourceError ? <p className="lyrics-note is-error">{sourceError}</p> : null}
-              {pasteForm}
-            </div>
-          </div>
-        </div>
+        <button type="button" className="lyrics-add" onClick={addLine}>Add line</button>
+        <button type="button" className="lyrics-reset" onClick={onReset}>Reset</button>
       </div>
       <div className="lyrics-layout">
-        <div className="lyrics-pane">
-          <div className="lyrics-text">
-            {parsed.lines.map((line, index) => {
-              const color = memberColor(artist, line.who, line.color);
-              const body = cleanLyric(english ? englishLines?.[index] || line.korean || line.text : line.korean || line.text);
-              if (!body || /^['".,!?…-]+$/.test(body)) return null;
+        <div className="lyrics-editor">
+          {data.lines.map((line, index) => {
+            const open = openIndex === index;
+            return (
+              <div className="lyric-row" key={index}>
+                <span className="lyric-num">{index + 1}</span>
+                <div className="lyric-who-select">
+                  <button
+                    type="button"
+                    className="lyric-who-btn"
+                    onClick={() => setOpenIndex(open ? null : index)}
+                  >
+                    {line.members.length === 0 ? (
+                      <span className="lyric-who-empty">Select</span>
+                    ) : (
+                      line.members.map((name, i) => (
+                        <span key={name}>
+                          {i > 0 ? <span className="lyric-plus"> + </span> : null}
+                          <span style={{ color: memberColor(artist, name, "#ccc") }}>[{name.toUpperCase()}]</span>
+                        </span>
+                      ))
+                    )}
+                  </button>
+                  {open ? (
+                    <div className="lyric-who-menu">
+                      <button
+                        type="button"
+                        className={line.members.includes("ALL") ? "is-on" : ""}
+                        onClick={() => toggleMember(index, "ALL")}
+                      >
+                        <span style={{ color: "#ddd" }}>ALL</span>
+                        {line.members.includes("ALL") ? <span className="check">✓</span> : null}
+                      </button>
+                      {available.length === 0 ? (
+                        <div className="lyric-who-empty">No members loaded for this group</div>
+                      ) : (
+                        available.map((name) => {
+                          const selected = line.members.includes(name);
+                          return (
+                            <button
+                              key={name}
+                              type="button"
+                              className={selected ? "is-on" : ""}
+                              onClick={() => toggleMember(index, name)}
+                            >
+                              <span style={{ color: memberColor(artist, name, "#ccc") }}>{name}</span>
+                              {selected ? <span className="check">✓</span> : null}
+                            </button>
+                          );
+                        })
+                      )}
+                      <button type="button" className="lyric-who-done" onClick={() => setOpenIndex(null)}>Done</button>
+                    </div>
+                  ) : null}
+                </div>
+                <input
+                  className="lyric-input"
+                  value={line.text}
+                  onChange={(event) => setLine(index, { text: event.target.value })}
+                  onPaste={(event) => {
+                    const raw = event.clipboardData.getData("text");
+                    if (!raw.includes("\n")) return;
+                    event.preventDefault();
+                    pasteAt(index, raw);
+                  }}
+                  placeholder="Lyric line (paste multiple lines)"
+                />
+                <button type="button" className="lyric-remove" onClick={() => removeLine(index)} aria-label="Remove line">×</button>
+              </div>
+            );
+          })}
+        </div>
+        <div className="lyric-side">
+          <div className="lyric-key">
+            {ranked.map(([name, stats]) => {
+              const color = memberColor(artist, name, "#ccc");
               return (
-                <p key={index}>
-                  <span className="lyric-who" style={{ color }}>[{line.who.replace(/[,:;]+$/g, "").trim()}]</span>
-                  <span>{body}</span>
-                </p>
+                <div key={name} className="member-box" style={{ "--member": color } as CSSProperties}>
+                  <div>
+                    <div className="lyric-name-row">
+                      <div className="lyric-key-name" style={{ color }}>{name.toUpperCase()}</div>
+                    </div>
+                    <div className="lyric-key-time">{stats.lines} lines · {stats.words} words</div>
+                  </div>
+                </div>
               );
             })}
           </div>
         </div>
-        <aside className="lyric-side">
-          <div className="lyric-key">
-            {(() => {
-              const roster = parsed.members ?? [];
-              const group = roster.find((member) => member.name.replace(/[,:;]+$/g, "").trim() === "ALL");
-              const people = new Map<string, (typeof roster)[number]>();
-              for (const member of roster) {
-                const parts = member.name.split(/\s*(?:&|and)\s*/i).map((name) => name.replace(/[,:;]+$/g, "").trim()).filter((name) => name && name !== "ALL");
-                for (const name of parts) {
-                  const current = people.get(name);
-                  people.set(name, current
-                    ? { ...current, lines: current.lines + member.lines, words: (current.words ?? 0) + (member.words ?? 0) }
-                    : { ...member, name });
-                }
-              }
-              return [...people.values()].map((member) => {
-              const shown = member.name.replace(/[,:;]+$/g, "").trim();
-              const color = memberColor(artist, shown, member.color);
-              const saved = crops[cropId(artist, member.name)] ?? crops[cropId(artist, shown)];
-              const profile = saved?.photo ? null : profileShot(artist, shown);
-              void rosterTick;
-              const x = saved?.x ?? profile?.x ?? 50;
-              const y = saved?.y ?? profile?.y ?? Number(String(member.focus || "center 20%").match(/\d+/)?.[0] ?? 20);
-              const zoom = saved?.zoom ?? profile?.zoom ?? member.zoom ?? 1.2;
-              const photo = saved?.photo || profile?.photo || idolPhotos[nameKey(shown)] || idolPhotos[nameKey(member.name)] || member.photo;
-              const isBias = nameKey(loadBias()[nameKey(artist)] || "") === nameKey(shown);
-              const lines = member.lines + (group?.lines ?? 0);
-              const words = (member.words ?? 0) + (group?.words ?? 0);
-              return (
-                <div
-                  key={member.name}
-                  className={isBias ? "member-box is-bias" : "member-box"}
-                  style={{ "--member": color } as CSSProperties}
-                >
-                  <span className="member-photo-wrap">
-                    {photo ? <SoftPhoto className="member-photo" src={photo} style={{ objectPosition: `${x}% ${y}%`, transform: `scale(${zoom})` }} /> : <span className="member-photo is-empty" />}
-                  </span>
-                  <div>
-                    <div className="lyric-name-row">
-                      <div className="lyric-key-name" style={{ color }}>{shown}</div>
-                      {isBias ? <span className="bias-mini">★</span> : null}
-                    </div>
-                    <div className="lyric-key-time">{lines} lines · {words} words</div>
-                  </div>
-                </div>
-              );
-              });
-            })()}
-          </div>
-        </aside>
       </div>
-    </>
+    </section>
   );
 }
+
 type ProfileInfo = { name: string; born: string; role: string; country: string; flag: string; photo: string };
 
 const FLAGS: Record<string, string> = {
@@ -1046,6 +934,7 @@ function plainLyricLines(section: string) {
   }
   return lines;
 }
+
 
 const ROSTER_KEY = "gyt-group-roster";
 
@@ -1457,7 +1346,6 @@ function Home() {
   const coverFix = useRef(false);
   const countsTried = useRef(new Set<string>());
   const companyTried = useRef(new Set<number>());
-  const lyricsTried = useRef(new Set<number>());
   const [fact, setFact] = useState<{ field: "album" | "releaseDate" | "company" | "listPoints" | "duration"; value: string } | null>(null);
   useEffect(() => setFact(null), [selectedId]);
 
@@ -1627,36 +1515,6 @@ function Home() {
   }, [songs]);
 
   useEffect(() => {
-    const missing = songs.filter((song) => !song.lyrics && !lyricsTried.current.has(song.id));
-    if (!missing.length) return;
-    let cancelled = false;
-    (async () => {
-      for (const song of missing) {
-        if (cancelled) return;
-        lyricsTried.current.add(song.id);
-        try {
-          const result = await findLyrics({ data: { artist: song.artist, title: song.title } });
-          if (!result?.lines?.length) continue;
-          setSongs((prev) => {
-            const next = prev.map((item) =>
-              item.id === song.id && !item.lyrics ? { ...item, geniusUrl: result.source, lyrics: JSON.stringify(result) } : item,
-            );
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-            return next;
-          });
-        } catch {
-          /* leave the song without lyrics so a later open can retry */
-        }
-        if (cancelled) return;
-        await new Promise((resolve) => window.setTimeout(resolve, 800));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [songs]);
-
-  useEffect(() => {
     const now = Date.now();
     const staleYouTube = songs.filter(
       (song) => song.videoId && (!song.youtubeAt || now - song.youtubeAt > COUNT_STALE),
@@ -1725,7 +1583,11 @@ function Home() {
               .replace(/\(.*?\)|\[.*?\]/g, " ")
               .replace(/\s+[-–].*$/, "")
               .replace(/[^a-z0-9]/g, "");
-            const streams = catalog[full] || (loose && catalog[loose]);
+            let streams = catalog[full] || (loose && catalog[loose]);
+            if (!streams && full.length >= 4) {
+              const hit = Object.entries(catalog).find(([key]) => key.includes(full) || full.includes(key));
+              if (hit && hit[0].length >= 4) streams = hit[1];
+            }
             if (!streams || song.spotifyStreams === streams) return song;
             changed = true;
             return { ...song, spotifyStreams: streams, spotifyAt: now };
@@ -2255,59 +2117,28 @@ function Home() {
                   />
                 </div>
               ) : null}
-              <section className="lyrics">
-                <LyricsBlock
-                  text={selected.lyrics}
-                  artist={selected.artist}
-                  onLoad={async (url) => {
-                    const result = await getLyrics({ data: { url, artist: selected.artist, title: selected.title } });
-                    if (!result?.lines?.length) return false;
-                    setSongs((prev) => {
-                      const next = prev.map((item) =>
-                        item.id === selected.id ? { ...item, geniusUrl: result.source, lyrics: JSON.stringify(result) } : item,
-                      );
-                      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-                      return next;
-                    });
-                    flushLibrarySave();
-                    return true;
-                  }}
-                  onPaste={(raw) => {
-                    const result = parsePastedLyrics(raw, selected.artist);
-                    if (!result) return false;
-                    setSongs((prev) => {
-                      const next = prev.map((item) =>
-                        item.id === selected.id ? { ...item, geniusUrl: undefined, lyrics: JSON.stringify(result) } : item,
-                      );
-                      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-                      return next;
-                    });
-                    flushLibrarySave();
-                    return true;
-                  }}
-                  onReset={() => {
-                    setSongs((prev) => {
-                      const next = prev.map((item) => item.id === selected.id ? { ...item, geniusUrl: undefined, lyrics: undefined } : item);
-                      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-                      return next;
-                    });
-                    flushLibrarySave();
-                  }}
-                  onTranslated={(english) => {
-                    setSongs((prev) => {
-                      const song = prev.find((item) => item.id === selected.id);
-                      if (!song?.lyrics?.startsWith("{")) return prev;
-                      const parsed = JSON.parse(song.lyrics) as { lines?: { english?: string; korean?: string }[] };
-                      if (!parsed.lines) return prev;
-                      const lines = parsed.lines.map((line, index) => ({ ...line, english: english[index] || line.english || line.korean }));
-                      const next = prev.map((item) => item.id === song.id ? { ...item, lyrics: JSON.stringify({ ...parsed, lines }) } : item);
-                      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-                      return next;
-                    });
-                    flushLibrarySave();
-                  }}
-                />
-              </section>
+              <LyricsBlock
+                text={selected.lyrics}
+                artist={selected.artist}
+                onChange={(lyrics) => {
+                  setSongs((prev) => {
+                    const next = prev.map((item) =>
+                      item.id === selected.id ? { ...item, geniusUrl: undefined, lyrics } : item,
+                    );
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+                    return next;
+                  });
+                  flushLibrarySave();
+                }}
+                onReset={() => {
+                  setSongs((prev) => {
+                    const next = prev.map((item) => item.id === selected.id ? { ...item, geniusUrl: undefined, lyrics: undefined } : item);
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+                    return next;
+                  });
+                  flushLibrarySave();
+                }}
+              />
               <GroupProfile artist={selected.artist} />
             </article>
             )
