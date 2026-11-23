@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEven
 import { createPortal } from "react-dom";
 import { getSpotifyStreams } from "../lib/spotify";
 import { getCompany } from "../lib/company";
-import { englishFromSource } from "../lib/lyrics";
 import { getGroup, getIdolPhoto } from "../lib/group";
 
 export const Route = createFileRoute("/")({ component: Home });
@@ -612,6 +611,9 @@ function LyricsBlock({
   const saved = normalizeLyrics(text);
   const [draft, setDraft] = useState<LyricsData>(saved);
   const [english, setEnglish] = useState(false);
+  const [englishLines, setEnglishLines] = useState<string[] | null>(null);
+  const [translateError, setTranslateError] = useState("");
+  const [translating, setTranslating] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -655,37 +657,47 @@ function LyricsBlock({
   const submitted = Boolean(data.members?.length);
   const dirty = JSON.stringify(data.lines) !== JSON.stringify(saved.lines) || Boolean(data.members) !== Boolean(saved.members);
   useEffect(() => onDirtyChange?.(dirty), [dirty]);
-  const [translating, setTranslating] = useState(false);
-  useEffect(() => {
-    if (!english || !submitted) return;
-    if (data.lines.every((line) => !/[가-힣]/.test(line.text) || (line.english && line.english !== line.text))) return;
-    let dead = false;
-    setTranslating(true);
-    fetch("/api/translate", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ lines: data.lines.map((line) => line.text) }),
-    })
-      .then((res) => res.json())
-      .then((result: { english?: string[] }) => {
-        if (dead || !result.english || result.english.length !== data.lines.length) return;
-        const next = {
-          v: 12 as const,
-          lines: data.lines.map((line, index) => ({ ...line, english: result.english?.[index] || line.text })),
-          members: data.members,
-        };
-        setDraft(next);
-        persist(next);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!dead) setTranslating(false);
-      });
-    return () => {
-      dead = true;
-    };
-  }, [english, submitted]);
   const persist = (next: LyricsData) => onSave(JSON.stringify(next));
+  const showEnglish = async () => {
+    if (english) {
+      setEnglish(false);
+      return;
+    }
+    setEnglish(true);
+    setTranslateError("");
+    const ready = data.lines.every((line) => !/[가-힣]/.test(line.text) || (line.english && line.english !== line.text));
+    if (ready && data.lines.some((line) => line.english && line.english !== line.text)) {
+      setEnglishLines(data.lines.map((line) => line.english || line.text));
+      return;
+    }
+    setTranslating(true);
+    try {
+      const res = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ lines: data.lines.map((line) => line.text) }),
+      });
+      const result = (await res.json()) as { english?: string[]; error?: string };
+      if (!res.ok || !result.english || result.english.length !== data.lines.length) {
+        throw new Error(result.error || "Translation failed");
+      }
+      const changed = result.english.some((line, index) => line !== data.lines[index].text);
+      if (!changed) throw new Error("Translation failed");
+      setEnglishLines(result.english);
+      const next = {
+        v: 12 as const,
+        lines: data.lines.map((line, index) => ({ ...line, english: result.english?.[index] || line.text })),
+        members: data.members,
+      };
+      setDraft(next);
+      persist(next);
+    } catch {
+      setEnglish(false);
+      setTranslateError("Couldn't translate these lyrics. Try again.");
+    } finally {
+      setTranslating(false);
+    }
+  };
   const setLine = (index: number, patch: Partial<LyricLine>) => {
     setDraft((current) => ({
       ...current,
@@ -719,7 +731,8 @@ function LyricsBlock({
     return available.find((name) => name.toLowerCase().replace(/[^a-z0-9]/g, "") === key) || label.trim();
   };
   const parseRow = (row: string, fallback: string[]) => {
-    let rest = row.trim();
+    let rest = row.trim().replace(/^[【［\[]/, "[").replace(/[】］\]]$/, "]");
+    rest = rest.replace(/【/g, "[").replace(/】/g, "]").replace(/［/g, "[").replace(/］/g, "]");
     const members: string[] = [];
     const takeTag = () => {
       const match = rest.match(/^\[([^\]]+)\]\s*(.*)$/);
@@ -728,26 +741,40 @@ function LyricsBlock({
       return match[1].replace(/[,:;]+$/g, "").trim();
     };
     const first = takeTag();
-    if (!first) return { text: row, members: fallback };
+    if (!first) return { text: row.trim(), members: fallback, tagged: false };
     const firstParts = first.split(/\s*(?:&|and|\+)\s*/i).map((part) => part.trim()).filter(Boolean).slice(0, 2);
     members.push(...firstParts.map(matchMember));
     if (members.length < 2 && rest.startsWith("[")) {
-      const next = rest.match(/^\[([^\]]+)\]/);
+      const next = rest.match(/^\[([^\]]+)\]\s*(.*)$/);
       const nextKey = next?.[1].toLowerCase().replace(/[^a-z0-9]/g, "") || "";
       const isMember = nextKey === "all" || available.some((name) => name.toLowerCase().replace(/[^a-z0-9]/g, "") === nextKey);
-      if (isMember && next) {
+      if (isMember && next && next[2].trim()) {
         members.push(matchMember(next[1]));
-        rest = rest.slice(next[0].length).trim().replace(/^[+&]\s*/, "");
+        rest = next[2];
       }
     }
     const wrapped = rest.match(/^\[([\s\S]+)\]\s*$/);
-    return { text: (wrapped ? wrapped[1] : rest).trim(), members: members.slice(0, 2) };
+    return { text: (wrapped ? wrapped[1] : rest).trim(), members: members.slice(0, 2), tagged: true };
+  };
+  const parseBlock = (raw: string, fallback: string[]) => {
+    const rows = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").map((row) => row.trim()).filter(Boolean);
+    const parsed: { text: string; members: string[] }[] = [];
+    let pending: string[] | null = null;
+    for (const row of rows) {
+      const line = parseRow(row, fallback);
+      if (line.tagged && !line.text) {
+        pending = line.members;
+        continue;
+      }
+      parsed.push({ text: line.text, members: !line.tagged && pending ? pending : line.members });
+      pending = null;
+    }
+    if (pending) parsed.push({ text: "", members: pending });
+    return parsed;
   };
   const pasteAt = (index: number, raw: string) => {
-    const rows = raw.replace(/\r\n/g, "\n").split("\n").map((row) => row.trim()).filter(Boolean);
-    if (rows.length === 0) return;
-    const fallback = data.lines[index]?.members ?? [];
-    const parsed = rows.map((row) => parseRow(row, fallback));
+    const parsed = parseBlock(raw, data.lines[index]?.members ?? []);
+    if (!parsed.length) return;
     setDraft((current) => {
       const lines = [...current.lines];
       lines.splice(index, 1, ...parsed);
@@ -801,7 +828,7 @@ function LyricsBlock({
           <div className="lyrics-head">Lyrics</div>
           <label className="lang-switch">
             <span className={english ? "" : "is-on"}>KO</span>
-            <button type="button" className={english ? "is-english" : ""} onClick={() => setEnglish((value) => !value)} aria-label="Toggle translation">
+            <button type="button" className={english ? "is-english" : ""} onClick={showEnglish} aria-label="Toggle translation">
               <span />
             </button>
             <span className={english ? "is-on" : ""}>{translating ? "…" : "EN"}</span>
@@ -809,11 +836,12 @@ function LyricsBlock({
           <button type="button" className="lyrics-reset" onClick={() => onEdit?.()}>Edit</button>
           <button type="button" className="lyrics-reset" onClick={() => setConfirmReset(true)}>Reset</button>
         </div>
+        {translateError ? <p className="lyrics-note is-error">{translateError}</p> : null}
         <div className="lyrics-layout">
           <div className="lyrics-pane">
             <div className="lyrics-text">
               {data.lines.map((line, index) => {
-                const body = english && line.english ? line.english : line.text;
+                const body = english ? (englishLines?.[index] || line.english || line.text) : line.text;
                 if (!body.trim()) return null;
                 return (
                   <p key={index}>
@@ -951,14 +979,23 @@ function LyricsBlock({
                 <input
                   className="lyric-input"
                   value={line.text}
-                  onChange={(event) => setLine(index, { text: event.target.value })}
-                  onPaste={(event) => {
-                    const raw = event.clipboardData.getData("text");
-                    if (!raw.includes("\n")) return;
-                    event.preventDefault();
-                    pasteAt(index, raw);
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (value.includes("\n")) {
+                      pasteAt(index, value);
+                      return;
+                    }
+                    setLine(index, { text: value });
                   }}
-                  placeholder="Lyric line (paste multiple lines)"
+                  onPaste={(event) => {
+                    const raw = event.clipboardData.getData("text/plain") || event.clipboardData.getData("text");
+                    if (!raw.trim()) return;
+                    if (raw.includes("\n") || raw.includes("\r") || /^\s*\[[^\]]+\]/.test(raw)) {
+                      event.preventDefault();
+                      pasteAt(index, raw);
+                    }
+                  }}
+                  placeholder="Lyric line, or paste [MEMBER] lines"
                 />
                 <button type="button" className="lyric-remove" onClick={() => removeLine(index)} aria-label="Remove line">×</button>
               </div>

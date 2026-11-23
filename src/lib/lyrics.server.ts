@@ -285,25 +285,49 @@ function pairEnglish(korean: string[], english: string[]) {
   return matched / comparable.length >= 0.9 ? take : null;
 }
 
-async function translateOne(line: string) {
-  const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q=${encodeURIComponent(line)}`, {
-    headers: { "user-agent": "Mozilla/5.0" },
-  });
-  if (!res.ok) return line;
+const SPLIT = "\n|||\n";
+
+async function translateBatch(lines: string[]) {
+  const query = lines.map((line) => line.replace(/\s+/g, " ").trim()).join(SPLIT);
+  const res = await fetch(
+    `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(query)}`,
+    { headers: { "user-agent": "Mozilla/5.0" } },
+  );
+  if (!res.ok) return lines;
   const data = (await res.json()) as [Array<[string]>];
-  const text = (data?.[0] ?? []).map((seg) => seg?.[0] ?? "").join("").replace(/\s+/g, " ").trim();
-  return text || line;
+  const text = (data?.[0] ?? []).map((seg) => seg?.[0] ?? "").join("");
+  const pieces = text.split("|||").map((part) => part.trim());
+  if (pieces.length !== lines.length) return lines;
+  return pieces.map((part, index) => part || lines[index]);
 }
 
 async function translateLines(lines: string[]) {
   const next = [...lines];
-  for (let index = 0; index < lines.length; index += 1) {
-    if (!/[가-힣]/.test(lines[index])) continue;
+  const jobs = lines
+    .map((line, index) => ({ line, index }))
+    .filter((item) => /[가-힣]/.test(item.line));
+  const apply = async (part: { line: string; index: number }[]) => {
+    if (!part.length) return;
     try {
-      next[index] = await translateOne(lines[index]);
+      const translated = await translateBatch(part.map((item) => item.line));
+      const stuck = translated.every((line, index) => line === part[index].line);
+      if (stuck && part.length > 1) {
+        await apply(part.slice(0, Math.ceil(part.length / 2)));
+        await apply(part.slice(Math.ceil(part.length / 2)));
+        return;
+      }
+      part.forEach((item, index) => {
+        if (translated[index]) next[item.index] = translated[index];
+      });
     } catch {
-      /* keep the original line */
+      if (part.length > 1) {
+        await apply(part.slice(0, Math.ceil(part.length / 2)));
+        await apply(part.slice(Math.ceil(part.length / 2)));
+      }
     }
+  };
+  for (let start = 0; start < jobs.length; start += 40) {
+    await apply(jobs.slice(start, start + 40));
   }
   return next;
 }
