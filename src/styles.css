@@ -82,11 +82,22 @@
   height: var(--nav-h);
   padding: 0 1.5rem;
   overflow: visible;
-  background-color: #0b0b0d;
-  background-image:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 46%),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 4px);
+  background: #0c0c0e;
   box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.nav-shade {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.nav > :not(.nav-shade) {
+  position: relative;
+  z-index: 1;
 }
 
 .brand {

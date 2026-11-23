@@ -1118,6 +1118,62 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
 }
 
 
+function NavShade() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    const parent = canvas?.parentElement;
+    if (!canvas || !parent) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    let dead = false;
+    let frame = 0;
+    const size = () => {
+      const width = parent.clientWidth;
+      const height = parent.clientHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.max(1, Math.floor(width * dpr));
+      canvas.height = Math.max(1, Math.floor(height * dpr));
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    size();
+    const observer = new ResizeObserver(size);
+    observer.observe(parent);
+    const draw = (now: number) => {
+      if (dead) return;
+      frame = window.requestAnimationFrame(draw);
+      if (document.hidden) return;
+      const width = parent.clientWidth;
+      const height = parent.clientHeight;
+      const t = now / 1000;
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#0c0c0e";
+      ctx.fillRect(0, 0, width, height);
+      const lights = [
+        { x: width * (0.2 + Math.sin(t * 0.11) * 0.16), y: height * (0.3 + Math.cos(t * 0.08) * 0.4), r: width * 0.32, color: "rgba(124, 58, 237, 0.28)" },
+        { x: width * (0.72 + Math.cos(t * 0.09) * 0.14), y: height * (0.6 + Math.sin(t * 0.07) * 0.35), r: width * 0.38, color: "rgba(196, 181, 253, 0.16)" },
+        { x: width * (0.48 + Math.sin(t * 0.06 + 1.4) * 0.2), y: height * 0.5, r: width * 0.24, color: "rgba(255, 255, 255, 0.06)" },
+      ];
+      for (const light of lights) {
+        const glow = ctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, light.r);
+        glow.addColorStop(0, light.color);
+        glow.addColorStop(1, "transparent");
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, width, height);
+      }
+    };
+    frame = window.requestAnimationFrame(draw);
+    return () => {
+      dead = true;
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, []);
+  return <canvas ref={ref} className="nav-shade" aria-hidden="true" />;
+}
+
 function GridPulse({ color }: { color: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const colorRef = useRef(color);
@@ -1152,7 +1208,7 @@ function GridPulse({ color }: { color: string }) {
         const row = viewTop + Math.floor(Math.random() * viewRows);
         const key = `${col}:${row}`;
         if (used.has(key)) continue;
-        cells.push({ col, row, age: Math.random() * 0.2, dur: 1.8 + Math.random() * 2.4 });
+        cells.push({ col, row, age: Math.random() * 0.75, dur: 2.8 + Math.random() * 2.2 });
         return true;
       }
       return false;
@@ -1171,7 +1227,7 @@ function GridPulse({ color }: { color: string }) {
       const height = parent.clientHeight;
       const scroll = parent.scrollTop;
       canvas.style.transform = `translateY(${scroll}px)`;
-      while (cells.length < 9) {
+      while (cells.length < 26) {
         if (!place()) break;
       }
       ctx.clearRect(0, 0, width, height);
@@ -1184,10 +1240,22 @@ function GridPulse({ color }: { color: string }) {
         }
         const y = cell.row * 40 - scroll;
         const x = cell.col * 40;
-        if (y < -40 || y > height || x > width) continue;
-        const alpha = Math.sin(cell.age * Math.PI) * 0.42;
-        ctx.fillStyle = colorRef.current;
+        if (y < -80 || y > height + 40 || x > width) continue;
+        const attack = 0.14;
+        const fade = cell.age < attack
+          ? 1 - (1 - cell.age / attack) ** 3
+          : (1 - (cell.age - attack) / (1 - attack)) ** 1.35;
+        const alpha = Math.max(0, fade) * 0.34;
+        const cx = x + 20;
+        const cy = y + 20;
+        const glow = ctx.createRadialGradient(cx, cy, 6, cx, cy, 46);
+        glow.addColorStop(0, colorRef.current);
+        glow.addColorStop(1, "transparent");
+        ctx.globalAlpha = alpha * 0.85;
+        ctx.fillStyle = glow;
+        ctx.fillRect(x - 16, y - 16, 72, 72);
         ctx.globalAlpha = alpha;
+        ctx.fillStyle = colorRef.current;
         ctx.fillRect(x + 1, y + 1, 38, 38);
       }
       ctx.globalAlpha = 1;
@@ -1644,6 +1712,7 @@ function Home() {
   return (
     <div className="app-shell">
       <header className="nav">
+        <NavShade />
         <div className="brand">
           <img className="avatar" src="/avatar.png" alt="Garrett Jahnke" />
           <div>
