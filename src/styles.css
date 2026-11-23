@@ -1335,14 +1335,15 @@
 .lyrics-empty button,
 .lyrics-add { border: 1px solid rgba(255,255,255,0.28); border-radius: 999px; background: transparent; color: #eee; font: inherit; font-size: 0.75rem; padding: 0.32rem 0.85rem; cursor: pointer; }
 .lyrics-add { margin-left: auto; }
-.lyrics-editor { display: flex; flex-direction: column; gap: 0.35rem; max-height: 28rem; overflow-y: auto; padding-right: 0.2rem; }
-.lyric-row { display: grid; grid-template-columns: 2.2rem 11.5rem minmax(0, 1fr) 1.6rem; align-items: center; gap: 0.4rem; }
-.lyric-num { color: #888; font-size: 0.75rem; font-weight: 650; text-align: right; }
+.lyrics-submit { border: 1px solid rgba(255,255,255,0.5); border-radius: 999px; background: #fff; color: #111; font: inherit; font-size: 0.75rem; font-weight: 650; padding: 0.32rem 0.9rem; cursor: pointer; }
+.lyrics-editor { display: flex; flex-direction: column; gap: 0.35rem; max-height: 28rem; overflow-y: auto; padding-right: 0.2rem; overflow-x: visible; }
+.lyric-row { display: grid; grid-template-columns: 1.6rem 11.5rem minmax(0, 1fr) 1.6rem; align-items: center; gap: 0.35rem; }
+.lyric-num { color: #888; font-size: 0.75rem; font-weight: 650; text-align: left; }
 .lyric-who-select { position: relative; }
 .lyric-who-btn { width: 100%; min-height: 2rem; padding: 0.25rem 0.45rem; border: 1px solid rgba(255,255,255,0.22); border-radius: 0.45rem; background: #1c1c1c; color: #ccc; font: inherit; font-size: 0.72rem; text-align: left; cursor: pointer; }
 .lyric-who-btn .lyric-who-empty { color: #777; }
 .lyric-plus { color: #888; }
-.lyric-who-menu { position: absolute; top: calc(100% + 0.2rem); left: 0; z-index: 40; min-width: 12rem; max-height: 16rem; overflow-y: auto; border-radius: 0.55rem; background: #1a1a1a; box-shadow: 0 0 0 1px rgba(255,255,255,0.1), 0 12px 32px rgba(0,0,0,0.5); }
+.lyric-who-menu { position: fixed; z-index: 1000; min-width: 12rem; max-height: 16rem; overflow-y: auto; border-radius: 0.55rem; background: #1a1a1a; box-shadow: 0 0 0 1px rgba(255,255,255,0.1), 0 12px 32px rgba(0,0,0,0.5); }
 .lyric-who-menu button { display: flex; width: 100%; align-items: center; justify-content: space-between; padding: 0.45rem 0.7rem; border: 0; background: transparent; color: #eee; font: inherit; font-size: 0.8rem; text-align: left; cursor: pointer; }
 .lyric-who-menu button:hover,
 .lyric-who-menu button.is-on { background: #2a2a2a; }

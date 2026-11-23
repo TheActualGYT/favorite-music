@@ -557,7 +557,7 @@ function SoftPhoto({ src, className, style }: { src: string; className?: string;
 }
 
 type LyricLine = { text: string; english?: string; members: string[] };
-type LyricsData = { v: 12; lines: LyricLine[] };
+type LyricsData = { v: 12; lines: LyricLine[]; members?: { name: string; lines: number; words: number }[] };
 
 function normalizeLyrics(raw?: string): LyricsData {
   if (!raw?.startsWith("{")) return { v: 12, lines: [] };
@@ -571,6 +571,9 @@ function normalizeLyrics(raw?: string): LyricsData {
         english: line.english,
         members: Array.isArray(line.members) ? line.members.slice(0, 2) : [],
       })),
+      members: Array.isArray((parsed as { members?: { name: string; lines: number; words: number }[] }).members)
+        ? (parsed as { members: { name: string; lines: number; words: number }[] }).members
+        : undefined,
     };
   } catch {
     return { v: 12, lines: [] };
@@ -603,6 +606,7 @@ function LyricsBlock({
 }) {
   const data = normalizeLyrics(text);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [rosterTick, setRosterTick] = useState(0);
   useEffect(() => {
     const bump = () => setRosterTick((value) => value + 1);
@@ -653,18 +657,26 @@ function LyricsBlock({
     update({ v: 12, lines });
   };
 
-  const memberStats = new Map<string, { lines: number; words: number }>();
-  for (const line of data.lines) {
-    const words = line.text.trim() ? line.text.trim().split(/\s+/).length : 0;
-    const names = line.members.includes("ALL") ? available : line.members.filter((name) => name !== "ALL");
-    for (const name of names) {
-      const current = memberStats.get(name) ?? { lines: 0, words: 0 };
-      current.lines += 1;
-      current.words += words;
-      memberStats.set(name, current);
+  const submit = () => {
+    const stats = new Map<string, { lines: number; words: number }>();
+    for (const line of data.lines) {
+      const words = line.text.trim() ? line.text.trim().split(/\s+/).length : 0;
+      const names = line.members.includes("ALL") ? available : line.members.filter((name) => name !== "ALL");
+      for (const name of names) {
+        const current = stats.get(name) ?? { lines: 0, words: 0 };
+        current.lines += 1;
+        current.words += words;
+        stats.set(name, current);
+      }
     }
-  }
-  const ranked = [...memberStats.entries()].filter(([name]) => name !== "ALL").sort((a, b) => b[1].lines - a[1].lines || b[1].words - a[1].words);
+    const members = [...stats.entries()]
+      .filter(([name]) => name !== "ALL")
+      .sort((a, b) => b[1].lines - a[1].lines || b[1].words - a[1].words)
+      .map(([name, value]) => ({ name, ...value }));
+    update({ v: 12, lines: data.lines, members });
+    setOpenIndex(null);
+  };
+  const ranked = data.members ?? [];
 
   if (data.lines.length === 0) {
     return (
@@ -697,6 +709,7 @@ function LyricsBlock({
       <div className="lyrics-top">
         <div className="lyrics-head">Lyrics</div>
         <button type="button" className="lyrics-add" onClick={addLine}>Add line</button>
+        <button type="button" className="lyrics-submit" onClick={submit}>Submit</button>
         <button type="button" className="lyrics-reset" onClick={onReset}>Reset</button>
       </div>
       <div className="lyrics-layout">
@@ -710,7 +723,16 @@ function LyricsBlock({
                   <button
                     type="button"
                     className="lyric-who-btn"
-                    onClick={() => setOpenIndex(open ? null : index)}
+                    onClick={(event) => {
+                      if (open) {
+                        setOpenIndex(null);
+                        setMenuPos(null);
+                        return;
+                      }
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setMenuPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 180) });
+                      setOpenIndex(index);
+                    }}
                   >
                     {line.members.length === 0 ? (
                       <span className="lyric-who-empty">Select</span>
@@ -723,8 +745,8 @@ function LyricsBlock({
                       ))
                     )}
                   </button>
-                  {open ? (
-                    <div className="lyric-who-menu">
+                  {open && menuPos ? createPortal(
+                    <div className="lyric-who-menu" style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}>
                       <button
                         type="button"
                         className={line.members.includes("ALL") ? "is-on" : ""}
@@ -751,8 +773,9 @@ function LyricsBlock({
                           );
                         })
                       )}
-                      <button type="button" className="lyric-who-done" onClick={() => setOpenIndex(null)}>Done</button>
-                    </div>
+                      <button type="button" className="lyric-who-done" onClick={() => { setOpenIndex(null); setMenuPos(null); }}>Done</button>
+                    </div>,
+                    document.body,
                   ) : null}
                 </div>
                 <input
@@ -774,15 +797,17 @@ function LyricsBlock({
         </div>
         <div className="lyric-side">
           <div className="lyric-key">
-            {ranked.map(([name, stats]) => {
-              const color = memberColor(artist, name, "#ccc");
+            {ranked.length === 0 ? (
+              <p className="lyrics-note">Submit to count lines and words.</p>
+            ) : ranked.map((member) => {
+              const color = memberColor(artist, member.name, "#ccc");
               return (
-                <div key={name} className="member-box" style={{ "--member": color } as CSSProperties}>
+                <div key={member.name} className="member-box" style={{ "--member": color } as CSSProperties}>
                   <div>
                     <div className="lyric-name-row">
-                      <div className="lyric-key-name" style={{ color }}>{name.toUpperCase()}</div>
+                      <div className="lyric-key-name" style={{ color }}>{member.name.toUpperCase()}</div>
                     </div>
-                    <div className="lyric-key-time">{stats.lines} lines · {stats.words} words</div>
+                    <div className="lyric-key-time">{member.lines} lines · {member.words} words</div>
                   </div>
                 </div>
               );
