@@ -118,6 +118,10 @@
   transition: transform 0.15s ease;
 }
 
+.nav-social.is-youtube {
+  margin-left: 0.45rem;
+}
+
 .nav-social:hover {
   transform: translateY(-1px) scale(1.04);
 }
@@ -454,6 +458,10 @@
   font-weight: 650;
   font-variant-numeric: tabular-nums lining-nums;
   text-align: center;
+}
+
+.rank.is-single {
+  font-size: 1.28rem;
 }
 
 .detail-cover {
@@ -1108,6 +1116,7 @@
   background-size: 40px 40px, 40px 40px;
   background-position: 0 0;
   background-origin: padding-box;
+  background-attachment: scroll;
 }
 
 .detail {

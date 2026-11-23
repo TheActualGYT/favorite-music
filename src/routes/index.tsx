@@ -1191,7 +1191,7 @@ function GridPulse({ color }: { color: string }) {
     let sized = { w: 0, h: 0 };
     const size = () => {
       const width = parent.clientWidth;
-      const height = Math.max(parent.clientHeight, parent.scrollHeight);
+      const height = parent.clientHeight;
       if (width === sized.w && height === sized.h) return;
       sized = { w: width, h: height };
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -1202,8 +1202,8 @@ function GridPulse({ color }: { color: string }) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     const place = () => {
-      const cols = Math.max(1, Math.ceil(parent.clientWidth / 40));
-      const rows = Math.max(1, Math.ceil(Math.max(parent.clientHeight, parent.scrollHeight) / 40));
+      const cols = Math.max(1, Math.ceil(sized.w / 40));
+      const rows = Math.max(1, Math.ceil(sized.h / 40));
       const used = new Set(cells.map((cell) => `${cell.col}:${cell.row}`));
       for (let tries = 0; tries < 16; tries += 1) {
         const col = Math.floor(Math.random() * cols);
@@ -1226,6 +1226,7 @@ function GridPulse({ color }: { color: string }) {
       last = now;
       if (document.hidden) return;
       size();
+      canvas.style.transform = `translate3d(0, ${parent.scrollTop}px, 0)`;
       const width = sized.w;
       const height = sized.h;
       while (cells.length < 26) {
@@ -1241,6 +1242,7 @@ function GridPulse({ color }: { color: string }) {
         }
         const x = cell.col * 40;
         const y = cell.row * 40;
+        if (x >= width || y >= height) continue;
         const attack = 0.14;
         const fade = cell.age < attack
           ? 1 - (1 - cell.age / attack) ** 3
@@ -1724,7 +1726,7 @@ function Home() {
               <div className="brand-sub">My KPOP Database</div>
             </div>
           </div>
-          <a className="nav-social" href="https://www.youtube.com/@theactualgyt3" target="_blank" rel="noreferrer" aria-label="YouTube">
+          <a className="nav-social is-youtube" href="https://www.youtube.com/@theactualgyt3" target="_blank" rel="noreferrer" aria-label="YouTube">
             <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
               <rect width="24" height="24" rx="6" fill="#ff0033" />
               <path fill="#fff" d="M9.5 7.4v9.2l7.2-4.6-7.2-4.6z" />
@@ -1836,7 +1838,7 @@ function Home() {
                     {selected && song.videoId ? (
                       <HeroClip scope="row" videoId={song.videoId} start={song.clipStart ?? 15} />
                     ) : null}
-                    <span className="rank">#{index + 1}</span>
+                    <span className={index + 1 < 10 ? "rank is-single" : "rank"}>#{index + 1}</span>
                     <span className="cover-frame">
                       {song.coverUrl ? (
                         <img className="cover" src={song.coverUrl} alt="" />
