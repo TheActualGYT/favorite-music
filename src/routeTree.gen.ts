@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiClipRouteImport } from './routes/api/clip'
 import { Route as ApiLibraryRouteImport } from './routes/api/library'
+import { Route as ApiTranslateRouteImport } from './routes/api/translate'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +29,44 @@ const ApiLibraryRoute = ApiLibraryRouteImport.update({
   path: '/api/library',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiTranslateRoute = ApiTranslateRouteImport.update({
+  id: '/api/translate',
+  path: '/api/translate',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/clip': typeof ApiClipRoute
   '/api/library': typeof ApiLibraryRoute
+  '/api/translate': typeof ApiTranslateRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/clip': typeof ApiClipRoute
   '/api/library': typeof ApiLibraryRoute
+  '/api/translate': typeof ApiTranslateRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/clip': typeof ApiClipRoute
   '/api/library': typeof ApiLibraryRoute
+  '/api/translate': typeof ApiTranslateRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/clip' | '/api/library'
+  fullPaths: '/' | '/api/clip' | '/api/library' | '/api/translate'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/clip' | '/api/library'
-  id: '__root__' | '/' | '/api/clip' | '/api/library'
+  to: '/' | '/api/clip' | '/api/library' | '/api/translate'
+  id: '__root__' | '/' | '/api/clip' | '/api/library' | '/api/translate'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiClipRoute: typeof ApiClipRoute
   ApiLibraryRoute: typeof ApiLibraryRoute
+  ApiTranslateRoute: typeof ApiTranslateRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLibraryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/translate': {
+      id: '/api/translate'
+      path: '/api/translate'
+      fullPath: '/api/translate'
+      preLoaderRoute: typeof ApiTranslateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiClipRoute: ApiClipRoute,
   ApiLibraryRoute: ApiLibraryRoute,
+  ApiTranslateRoute: ApiTranslateRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

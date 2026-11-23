@@ -655,22 +655,32 @@ function LyricsBlock({
   const submitted = Boolean(data.members?.length);
   const dirty = JSON.stringify(data.lines) !== JSON.stringify(saved.lines) || Boolean(data.members) !== Boolean(saved.members);
   useEffect(() => onDirtyChange?.(dirty), [dirty]);
+  const [translating, setTranslating] = useState(false);
   useEffect(() => {
     if (!english || !submitted) return;
-    if (data.lines.every((line) => line.english && line.english !== line.text)) return;
+    if (data.lines.every((line) => !/[가-힣]/.test(line.text) || (line.english && line.english !== line.text))) return;
     let dead = false;
-    englishFromSource({ data: { lines: data.lines.map((line) => line.text) } })
-      .then((result) => {
-        if (dead || result.length !== data.lines.length) return;
+    setTranslating(true);
+    fetch("/api/translate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ lines: data.lines.map((line) => line.text) }),
+    })
+      .then((res) => res.json())
+      .then((result: { english?: string[] }) => {
+        if (dead || !result.english || result.english.length !== data.lines.length) return;
         const next = {
           v: 12 as const,
-          lines: data.lines.map((line, index) => ({ ...line, english: result[index] || line.text })),
+          lines: data.lines.map((line, index) => ({ ...line, english: result.english?.[index] || line.text })),
           members: data.members,
         };
         setDraft(next);
         persist(next);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!dead) setTranslating(false);
+      });
     return () => {
       dead = true;
     };
@@ -703,18 +713,41 @@ function LyricsBlock({
     else next = [withoutAll[1], name];
     setLine(index, { members: next });
   };
+  const matchMember = (label: string) => {
+    const key = label.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (key === "all") return "ALL";
+    return available.find((name) => name.toLowerCase().replace(/[^a-z0-9]/g, "") === key) || label.trim();
+  };
+  const parseRow = (row: string, fallback: string[]) => {
+    let rest = row.trim();
+    const members: string[] = [];
+    const takeTag = () => {
+      const match = rest.match(/^\[([^\]]+)\]\s*(.*)$/);
+      if (!match) return null;
+      rest = match[2];
+      return match[1].replace(/[,:;]+$/g, "").trim();
+    };
+    const first = takeTag();
+    if (!first) return { text: row, members: fallback };
+    const firstParts = first.split(/\s*(?:&|and|\+)\s*/i).map((part) => part.trim()).filter(Boolean).slice(0, 2);
+    members.push(...firstParts.map(matchMember));
+    if (members.length < 2 && rest.startsWith("[")) {
+      const next = rest.match(/^\[([^\]]+)\]/);
+      const nextKey = next?.[1].toLowerCase().replace(/[^a-z0-9]/g, "") || "";
+      const isMember = nextKey === "all" || available.some((name) => name.toLowerCase().replace(/[^a-z0-9]/g, "") === nextKey);
+      if (isMember && next) {
+        members.push(matchMember(next[1]));
+        rest = rest.slice(next[0].length).trim().replace(/^[+&]\s*/, "");
+      }
+    }
+    const wrapped = rest.match(/^\[([\s\S]+)\]\s*$/);
+    return { text: (wrapped ? wrapped[1] : rest).trim(), members: members.slice(0, 2) };
+  };
   const pasteAt = (index: number, raw: string) => {
     const rows = raw.replace(/\r\n/g, "\n").split("\n").map((row) => row.trim()).filter(Boolean);
     if (rows.length === 0) return;
-    const parsed = rows.map((row) => {
-      const tagged = row.match(/^\[([^\]]+)\]\s*(.*)$/);
-      if (!tagged) return { text: row, members: data.lines[index]?.members ?? [] };
-      const label = tagged[1].replace(/[,:;]+$/g, "").trim();
-      const parts = label.toUpperCase() === "ALL"
-        ? ["ALL"]
-        : label.split(/\s*(?:&|and|\+)\s*/i).map((part) => part.trim()).filter(Boolean).slice(0, 2);
-      return { text: tagged[2], members: parts };
-    });
+    const fallback = data.lines[index]?.members ?? [];
+    const parsed = rows.map((row) => parseRow(row, fallback));
     setDraft((current) => {
       const lines = [...current.lines];
       lines.splice(index, 1, ...parsed);
@@ -771,7 +804,7 @@ function LyricsBlock({
             <button type="button" className={english ? "is-english" : ""} onClick={() => setEnglish((value) => !value)} aria-label="Toggle translation">
               <span />
             </button>
-            <span className={english ? "is-on" : ""}>EN</span>
+            <span className={english ? "is-on" : ""}>{translating ? "…" : "EN"}</span>
           </label>
           <button type="button" className="lyrics-reset" onClick={() => onEdit?.()}>Edit</button>
           <button type="button" className="lyrics-reset" onClick={() => setConfirmReset(true)}>Reset</button>

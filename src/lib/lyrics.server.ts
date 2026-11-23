@@ -285,27 +285,31 @@ function pairEnglish(korean: string[], english: string[]) {
   return matched / comparable.length >= 0.9 ? take : null;
 }
 
+async function translateOne(line: string) {
+  const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q=${encodeURIComponent(line)}`, {
+    headers: { "user-agent": "Mozilla/5.0" },
+  });
+  if (!res.ok) return line;
+  const data = (await res.json()) as [Array<[string]>];
+  const text = (data?.[0] ?? []).map((seg) => seg?.[0] ?? "").join("").replace(/\s+/g, " ").trim();
+  return text || line;
+}
+
 async function translateLines(lines: string[]) {
   const next = [...lines];
-  const jobs = lines.map((line, index) => ({ line, index })).filter((item) => /[가-힣]/.test(item.line));
-  for (let start = 0; start < jobs.length; start += 24) {
-    const part = jobs.slice(start, start + 24);
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/[가-힣]/.test(lines[index])) continue;
     try {
-      const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q=${encodeURIComponent(part.map((item) => item.line).join("\n"))}`);
-      if (!res.ok) continue;
-      const data = (await res.json()) as [Array<[string]>];
-      const text = (data?.[0] ?? []).map((seg) => seg?.[0] ?? "").join("");
-      const pieces = text.split("\n");
-      if (pieces.length !== part.length) continue;
-      part.forEach((item, index) => {
-        const line = pieces[index]?.trim();
-        if (line) next[item.index] = line;
-      });
+      next[index] = await translateOne(lines[index]);
     } catch {
       /* keep the original line */
     }
   }
   return next;
+}
+
+export async function translateLyricLines(lines: string[]) {
+  return translateLines(lines);
 }
 
 function looseLyrics(html: string) {
