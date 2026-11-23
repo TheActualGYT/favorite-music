@@ -284,14 +284,8 @@
   flex-direction: column;
   overflow: hidden;
   background-color: #141414;
-  background-image:
-    linear-gradient(120deg, rgba(167, 139, 250, 0.16), transparent 42%, rgba(255, 255, 255, 0.05) 68%, transparent),
-    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    radial-gradient(circle at 0 0, rgba(196, 181, 253, 0.28) 0.9px, transparent 1.1px);
-  background-size: 220% 220%, 12px 12px, 12px 12px, 12px 12px;
-  background-position: 0 0, 0 0, 0 0, 0 0;
-  animation: texture-shift 16s ease-in-out infinite;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.11) 1.15px, transparent 1.35px);
+  background-size: 22px 22px;
 }
 
 .sidebar-head {
@@ -407,15 +401,17 @@
 
 .rank {
   display: flex;
-  width: 2.7rem;
+  box-sizing: border-box;
+  width: calc(1.05rem + (var(--rank-digits, 1) * 0.62rem));
   flex: none;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  padding-left: 0.42rem;
   color: #fff;
   font-size: 0.92rem;
   font-weight: 650;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
+  font-variant-numeric: tabular-nums lining-nums;
+  text-align: left;
 }
 
 .detail-cover {

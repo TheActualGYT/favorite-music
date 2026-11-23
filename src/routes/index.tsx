@@ -1005,7 +1005,12 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
       pending.push(window.setTimeout(fn, ms));
     };
     const show = (index: number, mine: number) => {
-      if (dead || shown || mine !== token) return;
+      if (dead || mine !== token) return;
+      if (document.hidden) {
+        after(400, () => show(index, mine));
+        return;
+      }
+      if (shown) return;
       shown = true;
       setActive(index);
       setCovered(false);
@@ -1028,8 +1033,17 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
         });
       });
     };
+    const kick = (index: number) => {
+      const frame = frames[index].current;
+      if (!frame?.contentWindow) return;
+      const send = (payload: object) => frame.contentWindow?.postMessage(JSON.stringify(payload), "*");
+      send({ event: "listening", id: frame.id });
+      send({ event: "command", func: "mute", args: [] });
+      send({ event: "command", func: "seekTo", args: [playFrom, true] });
+      send({ event: "command", func: "playVideo", args: [] });
+    };
     const onMessage = (event: MessageEvent) => {
-      if (dead || typeof event.data !== "string") return;
+      if (dead || document.hidden || typeof event.data !== "string") return;
       const frame = frames[armed].current;
       if (!frame || event.source !== frame.contentWindow) return;
       let data: { event?: string; info?: { currentTime?: number; playerState?: number } | number };
@@ -1058,13 +1072,25 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
       send({ event: "listening", id: frame.id });
       send({ event: "command", func: "mute", args: [] });
       send({ event: "command", func: "playVideo", args: [] });
-    }, 700);
+    }, 250);
+    const onVis = () => {
+      shown = false;
+      baseline = null;
+      token += 1;
+      const mine = token;
+      setCovered(true);
+      if (document.hidden) return;
+      kick(armed);
+      after(7000, () => show(armed, mine));
+    };
     after(7000, () => show(0, token));
     window.addEventListener("message", onMessage);
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       dead = true;
       window.clearInterval(poke);
       window.removeEventListener("message", onMessage);
+      document.removeEventListener("visibilitychange", onVis);
       pending.forEach((id) => window.clearTimeout(id));
     };
   }, [videoId, start, playFrom, clipEnd]);
@@ -1612,7 +1638,10 @@ function Home() {
                 Click <strong>+ Add</strong> to get started.
               </p>
             ) : (
-              <div className="list">
+              <div
+                className="list"
+                style={{ "--rank-digits": String(Math.max(1, String(filteredSongs.length).length)) } as CSSProperties}
+              >
                 {filteredSongs.map((song, index) => {
                   const selected = song.id === selectedId;
                   return (
