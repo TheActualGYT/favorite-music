@@ -607,12 +607,39 @@ function LyricsBlock({
   const data = normalizeLyrics(text);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const openBtn = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const [rosterTick, setRosterTick] = useState(0);
   useEffect(() => {
     const bump = () => setRosterTick((value) => value + 1);
     window.addEventListener("gyt-roster", bump);
     return () => window.removeEventListener("gyt-roster", bump);
   }, []);
+  useEffect(() => {
+    if (openIndex === null) return;
+    const place = () => {
+      const btn = openBtn.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      setMenuPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 180) });
+    };
+    place();
+    const onScroll = () => place();
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (openBtn.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpenIndex(null);
+      setMenuPos(null);
+    };
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [openIndex]);
   void rosterTick;
   const available = artistMembers(artist);
   const update = (next: LyricsData) => onChange(JSON.stringify(next));
@@ -685,20 +712,8 @@ function LyricsBlock({
           <div className="lyrics-head">Lyrics</div>
         </div>
         <div className="lyrics-empty">
-          <p>No lyrics yet. Add a line, or paste several at once.</p>
+          <p>No lyrics yet.</p>
           <button type="button" onClick={addLine}>Add first line</button>
-          <textarea
-            className="lyric-paste-box"
-            placeholder="Paste multiple lines here (one per row)"
-            onPaste={(event) => {
-              const raw = event.clipboardData.getData("text");
-              if (!raw.trim()) return;
-              event.preventDefault();
-              const rows = raw.replace(/\r\n/g, "\n").split("\n").map((row) => row.trim()).filter(Boolean);
-              if (!rows.length) return;
-              update({ v: 12, lines: rows.map((row) => ({ text: row, members: [] })) });
-            }}
-          />
         </div>
       </section>
     );
@@ -723,6 +738,7 @@ function LyricsBlock({
                   <button
                     type="button"
                     className="lyric-who-btn"
+                    ref={open ? openBtn : undefined}
                     onClick={(event) => {
                       if (open) {
                         setOpenIndex(null);
@@ -746,7 +762,7 @@ function LyricsBlock({
                     )}
                   </button>
                   {open && menuPos ? createPortal(
-                    <div className="lyric-who-menu" style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}>
+                    <div ref={menuRef} className="lyric-who-menu" style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}>
                       <button
                         type="button"
                         className={line.members.includes("ALL") ? "is-on" : ""}
@@ -773,7 +789,6 @@ function LyricsBlock({
                           );
                         })
                       )}
-                      <button type="button" className="lyric-who-done" onClick={() => { setOpenIndex(null); setMenuPos(null); }}>Done</button>
                     </div>,
                     document.body,
                   ) : null}
