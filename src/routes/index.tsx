@@ -1188,9 +1188,12 @@ function GridPulse({ color }: { color: string }) {
     let frame = 0;
     type Cell = { col: number; row: number; age: number; dur: number };
     const cells: Cell[] = [];
+    let sized = { w: 0, h: 0 };
     const size = () => {
       const width = parent.clientWidth;
-      const height = parent.clientHeight;
+      const height = Math.max(parent.clientHeight, parent.scrollHeight);
+      if (width === sized.w && height === sized.h) return;
+      sized = { w: width, h: height };
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.max(1, Math.floor(width * dpr));
       canvas.height = Math.max(1, Math.floor(height * dpr));
@@ -1200,12 +1203,11 @@ function GridPulse({ color }: { color: string }) {
     };
     const place = () => {
       const cols = Math.max(1, Math.ceil(parent.clientWidth / 40));
-      const viewTop = Math.floor(parent.scrollTop / 40);
-      const viewRows = Math.max(1, Math.ceil(parent.clientHeight / 40));
+      const rows = Math.max(1, Math.ceil(Math.max(parent.clientHeight, parent.scrollHeight) / 40));
       const used = new Set(cells.map((cell) => `${cell.col}:${cell.row}`));
-      for (let tries = 0; tries < 12; tries += 1) {
+      for (let tries = 0; tries < 16; tries += 1) {
         const col = Math.floor(Math.random() * cols);
-        const row = viewTop + Math.floor(Math.random() * viewRows);
+        const row = Math.floor(Math.random() * rows);
         const key = `${col}:${row}`;
         if (used.has(key)) continue;
         cells.push({ col, row, age: Math.random() * 0.75, dur: 2.8 + Math.random() * 2.2 });
@@ -1223,10 +1225,9 @@ function GridPulse({ color }: { color: string }) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       if (document.hidden) return;
-      const width = parent.clientWidth;
-      const height = parent.clientHeight;
-      const scroll = parent.scrollTop;
-      canvas.style.transform = `translateY(${scroll}px)`;
+      size();
+      const width = sized.w;
+      const height = sized.h;
       while (cells.length < 26) {
         if (!place()) break;
       }
@@ -1238,25 +1239,27 @@ function GridPulse({ color }: { color: string }) {
           cells.splice(i, 1);
           continue;
         }
-        const y = cell.row * 40 - scroll;
         const x = cell.col * 40;
-        if (y < -80 || y > height + 40 || x > width) continue;
+        const y = cell.row * 40;
         const attack = 0.14;
         const fade = cell.age < attack
           ? 1 - (1 - cell.age / attack) ** 3
           : (1 - (cell.age - attack) / (1 - attack)) ** 1.35;
-        const alpha = Math.max(0, fade) * 0.34;
-        const cx = x + 20;
-        const cy = y + 20;
-        const glow = ctx.createRadialGradient(cx, cy, 6, cx, cy, 46);
+        const alpha = Math.max(0, fade) * 0.4;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x + 1, y + 1, 38, 38);
+        ctx.clip();
+        const glow = ctx.createRadialGradient(x + 20, y + 20, 2, x + 20, y + 20, 22);
         glow.addColorStop(0, colorRef.current);
         glow.addColorStop(1, "transparent");
-        ctx.globalAlpha = alpha * 0.85;
+        ctx.globalAlpha = alpha * 0.95;
         ctx.fillStyle = glow;
-        ctx.fillRect(x - 16, y - 16, 72, 72);
-        ctx.globalAlpha = alpha;
+        ctx.fillRect(x + 1, y + 1, 38, 38);
+        ctx.globalAlpha = alpha * 0.72;
         ctx.fillStyle = colorRef.current;
         ctx.fillRect(x + 1, y + 1, 38, 38);
+        ctx.restore();
       }
       ctx.globalAlpha = 1;
     };
@@ -1713,12 +1716,26 @@ function Home() {
     <div className="app-shell">
       <header className="nav">
         <NavShade />
-        <div className="brand">
-          <img className="avatar" src="/avatar.png" alt="Garrett Jahnke" />
-          <div>
-            <div className="brand-name">Garrett Jahnke</div>
-            <div className="brand-sub">My KPOP Database</div>
+        <div className="nav-start">
+          <div className="brand">
+            <img className="avatar" src="/avatar.png" alt="Garrett Jahnke" />
+            <div>
+              <div className="brand-name">Garrett Jahnke</div>
+              <div className="brand-sub">My KPOP Database</div>
+            </div>
           </div>
+          <a className="nav-social" href="https://www.youtube.com/@theactualgyt3" target="_blank" rel="noreferrer" aria-label="YouTube">
+            <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
+              <rect width="24" height="24" rx="6" fill="#ff0033" />
+              <path fill="#fff" d="M9.5 7.4v9.2l7.2-4.6-7.2-4.6z" />
+            </svg>
+          </a>
+          <a className="nav-social is-round" href="https://open.spotify.com/user/31fh5nzrhsdjj4bal7kh4kl63vfm?si=142898ee61514d26" target="_blank" rel="noreferrer" aria-label="Spotify">
+            <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
+              <circle cx="12" cy="12" r="11" fill="#1db954" />
+              <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M7 9.2c2.8-1.2 6.6-1 9.6.6M7.4 12.2c2.3-.9 5.2-.7 7.6.6M7.8 15.1c1.8-.6 3.8-.4 5.5.5" />
+            </svg>
+          </a>
         </div>
         <nav className="nav-links" aria-label="Library">
           {MENUS.map((menu) => (
