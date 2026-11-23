@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEven
 import { createPortal } from "react-dom";
 import { getSpotifyStreams } from "../lib/spotify";
 import { getCompany } from "../lib/company";
+import { englishFromSource } from "../lib/lyrics";
 import { getGroup, getIdolPhoto } from "../lib/group";
 
 export const Route = createFileRoute("/")({ component: Home });
@@ -651,6 +652,26 @@ function LyricsBlock({
   const submitted = Boolean(data.members?.length);
   const dirty = JSON.stringify(data.lines) !== JSON.stringify(saved.lines) || Boolean(data.members) !== Boolean(saved.members);
   useEffect(() => onDirtyChange?.(dirty), [dirty]);
+  useEffect(() => {
+    if (!english || !submitted) return;
+    if (data.lines.every((line) => line.english && line.english !== line.text)) return;
+    let dead = false;
+    englishFromSource({ data: { lines: data.lines.map((line) => line.text) } })
+      .then((result) => {
+        if (dead || result.length !== data.lines.length) return;
+        const next = {
+          v: 12 as const,
+          lines: data.lines.map((line, index) => ({ ...line, english: result[index] || line.text })),
+          members: data.members,
+        };
+        setDraft(next);
+        persist(next);
+      })
+      .catch(() => {});
+    return () => {
+      dead = true;
+    };
+  }, [english, submitted]);
   const persist = (next: LyricsData) => onSave(JSON.stringify(next));
   const setLine = (index: number, patch: Partial<LyricLine>) => {
     setDraft((current) => ({
@@ -736,11 +757,12 @@ function LyricsBlock({
     );
   }
 
-  return (
-    <section className="lyrics">
-      <div className="lyrics-top">
-        <div className="lyrics-head">Lyrics</div>
-        {submitted ? (
+  if (submitted) {
+    const bias = nameKey(loadBias()[nameKey(artist)] || "");
+    return (
+      <section className="lyrics">
+        <div className="lyrics-top">
+          <div className="lyrics-head">Lyrics</div>
           <label className="lang-switch">
             <span className={english ? "" : "is-on"}>KO</span>
             <button type="button" className={english ? "is-english" : ""} onClick={() => setEnglish((value) => !value)} aria-label="Toggle translation">
@@ -748,13 +770,67 @@ function LyricsBlock({
             </button>
             <span className={english ? "is-on" : ""}>EN</span>
           </label>
-        ) : (
-          <>
-            <button type="button" className="lyrics-add" onClick={addLine}>Add line</button>
-            <button type="button" className="lyrics-save" onClick={save} disabled={!dirty}>Save</button>
-            <button type="button" className="lyrics-submit" onClick={submit}>Submit</button>
-          </>
-        )}
+          <button type="button" className="lyrics-reset" onClick={onReset}>Reset</button>
+        </div>
+        <div className="lyrics-layout">
+          <div className="lyrics-pane">
+            <div className="lyrics-text">
+              {data.lines.map((line, index) => {
+                const body = english && line.english ? line.english : line.text;
+                if (!body.trim()) return null;
+                return (
+                  <p key={index}>
+                    {line.members.length === 0 ? null : line.members.map((name, i) => (
+                      <span key={name}>
+                        {i > 0 ? <span className="lyric-plus"> + </span> : null}
+                        <span className="lyric-who" style={{ color: name === "ALL" ? "#ddd" : memberColor(artist, name, "#ccc") }}>[{name.toUpperCase()}]</span>
+                      </span>
+                    ))}
+                    <span>{body}</span>
+                  </p>
+                );
+              })}
+            </div>
+          </div>
+          <aside className="lyric-side">
+            <div className="lyric-key">
+              {ranked.map((member) => {
+                const color = memberColor(artist, member.name, "#ccc");
+                const shot = profileShot(artist, member.name);
+                const isBias = bias === nameKey(member.name);
+                return (
+                  <div key={member.name} className={isBias ? "member-box is-bias" : "member-box"} style={{ "--member": color } as CSSProperties}>
+                    <span className="member-photo-wrap">
+                      {shot?.photo ? (
+                        <SoftPhoto className="member-photo" src={shot.photo} style={{ objectPosition: `${shot.x}% ${shot.y}%`, transform: `scale(${shot.zoom})` }} />
+                      ) : (
+                        <span className="member-photo is-empty" />
+                      )}
+                    </span>
+                    <div>
+                      <div className="lyric-name-row">
+                        <div className="lyric-key-name" style={{ color }}>{member.name.toUpperCase()}</div>
+                        {isBias ? <span className="bias-mini">★</span> : null}
+                      </div>
+                      <div className="lyric-key-time">{member.lines} lines · {member.words} words</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </aside>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="lyrics">
+      <div className="lyrics-top">
+        <div className="lyrics-head">Lyrics</div>
+        <button type="button" className="lyrics-add" onClick={addLine}>Add line</button>
+        <button type="button" className="lyrics-save" onClick={save} disabled={!dirty}>Save</button>
+        <button type="button" className="lyrics-submit" onClick={submit}>Submit</button>
         <button type="button" className="lyrics-reset" onClick={onReset}>Reset</button>
       </div>
       <div className="lyrics-layout">
@@ -825,8 +901,7 @@ function LyricsBlock({
                 </div>
                 <input
                   className="lyric-input"
-                  value={submitted && english && line.english ? line.english : line.text}
-                  readOnly={submitted}
+                  value={line.text}
                   onChange={(event) => setLine(index, { text: event.target.value })}
                   onPaste={(event) => {
                     const raw = event.clipboardData.getData("text");
@@ -843,21 +918,7 @@ function LyricsBlock({
         </div>
         <div className="lyric-side">
           <div className="lyric-key">
-            {ranked.length === 0 ? (
-              <p className="lyrics-note">Submit to count lines and words.</p>
-            ) : ranked.map((member) => {
-              const color = memberColor(artist, member.name, "#ccc");
-              return (
-                <div key={member.name} className="member-box" style={{ "--member": color } as CSSProperties}>
-                  <div>
-                    <div className="lyric-name-row">
-                      <div className="lyric-key-name" style={{ color }}>{member.name.toUpperCase()}</div>
-                    </div>
-                    <div className="lyric-key-time">{member.lines} lines · {member.words} words</div>
-                  </div>
-                </div>
-              );
-            })}
+            <p className="lyrics-note">Submit to count lines and words.</p>
           </div>
         </div>
       </div>
