@@ -1202,12 +1202,15 @@
   z-index: 30;
   background: #141414;
   opacity: 1;
-  transition: none;
+  transition: opacity 0.55s linear;
 }
 
 .clip-cover.is-off {
   opacity: 0;
-  transition: opacity 0.45s linear;
+}
+
+.clip-cover.is-instant {
+  transition: none;
 }
 
 .clip-cover img {
@@ -1240,11 +1243,15 @@
   transform: translate(-50%, -50%);
 }
 
+.detail-hero .hero-clip {
+  background: transparent;
+}
+
 .detail-hero .clip-slot iframe {
-  left: 68%;
-  width: 196%;
-  height: 196%;
-  transform: translate(-38%, -50%);
+  left: 50%;
+  width: 180%;
+  height: 180%;
+  transform: translate(-50%, -50%);
 }
 
 .detail-hero .edit-btn,
@@ -1345,33 +1352,38 @@
 .thoughts-panel { position: absolute; top: 100%; left: 0; z-index: 20; min-width: 8.5rem; margin-top: 0.35rem; overflow: hidden; border-radius: 0.7rem; background: #1c1c1c; box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 16px 40px rgba(0,0,0,0.45); }
 .thoughts-panel button { display: block; width: 100%; padding: 0.65rem 0.9rem; border: 0; background: transparent; color: #eee; font: inherit; font-size: 0.88rem; text-align: left; }
 .thoughts-head > span:first-child { text-transform: uppercase; }
-.thoughts-head { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.2rem; color: #f2f2f2; font-size: 1.45rem; font-weight: 750; letter-spacing: 0.04em; }
+.thoughts-head { display: inline-flex; align-items: center; gap: 0.4rem; margin-bottom: 0.2rem; color: #f2f2f2; font-size: 1.45rem; font-weight: 750; letter-spacing: 0.04em; }
 .thoughts-edit { margin-left: 0.35rem; border: 1px solid rgba(255,255,255,0.28); border-radius: 999px; background: transparent; color: #ddd; font: inherit; font-size: 0.72rem; letter-spacing: 0.04em; padding: 0.28rem 0.7rem; cursor: pointer; }
 .thoughts-edit:hover { border-color: #fff; color: #fff; }
 .bulb { width: 38px; height: 38px; }
 .bulb svg { width: 32px; height: 32px; }
 .thoughts-text { margin: 0; color: #c8c8c8; font-size: 0.98rem; line-height: 1.7; }
-.reaction { margin-top: 1rem; }
-.reaction-label {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 0.45rem;
-  color: #bdbdbd;
-  font-size: 0.82rem;
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.reaction-head {
+  float: right;
+  margin: 0 0 0.35rem 1rem;
+}
+.bulb.film {
+  display: grid;
+  place-items: center;
+  font-size: 32px;
+  line-height: 1;
 }
 .reaction-frame {
-  width: min(16rem, 100%);
+  clear: both;
+  width: min(18rem, 100%);
+  margin-top: 0.9rem;
   aspect-ratio: 16 / 9;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.45);
   border-radius: 0.7rem;
   background: #111;
 }
-.reaction-frame iframe { width: 100%; height: 100%; border: 0; }
+.reaction-frame iframe {
+  width: 138%;
+  height: 138%;
+  margin: -19% 0 0 -19%;
+  border: 0;
+}
 
 .detail .lyrics,
 .detail .lyrics:hover,

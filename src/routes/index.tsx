@@ -994,6 +994,7 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
   const clipEnd = start + 24;
   const frames = [useRef<HTMLIFrameElement>(null), useRef<HTMLIFrameElement>(null)];
   const [covered, setCovered] = useState(true);
+  const [instant, setInstant] = useState(false);
   const [active, setActive] = useState(0);
   const [srcs, setSrcs] = useState<[string, string]>([`${embedSrc(videoId, playFrom, clipEnd)}&r=1`, ""]);
   useEffect(() => {
@@ -1015,10 +1016,12 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
       }
       if (shown) return;
       shown = true;
+      setInstant(false);
       setActive(index);
       setCovered(false);
       after(10000, () => {
         if (dead || mine !== token) return;
+        setInstant(false);
         setCovered(true);
         shown = false;
         baseline = null;
@@ -1050,6 +1053,7 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
       baseline = null;
       awaitingSeek = true;
       token += 1;
+      setInstant(true);
       setCovered(true);
       if (document.hidden) return;
       kick(armed);
@@ -1122,7 +1126,7 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
           ) : null}
         </div>
       ))}
-      <div className={covered ? "clip-cover" : "clip-cover is-off"}>
+      <div className={covered ? `clip-cover${instant ? " is-instant" : ""}` : "clip-cover is-off"}>
         <img src={poster} alt="" />
       </div>
     </div>
@@ -2068,6 +2072,12 @@ function Home() {
                     </div>
                   ) : null}
                 </div>
+                {selected.reactionUrl && youtubeId(selected.reactionUrl) ? (
+                  <div className="thoughts-head reaction-head">
+                    <span>My Reaction</span>
+                    <span className="bulb film" aria-hidden="true">🎥</span>
+                  </div>
+                ) : null}
                 <div className="thoughts-head">
                   <span>My Thoughts</span>
                   <span className="bulb" aria-hidden="true">
@@ -2079,17 +2089,14 @@ function Home() {
                 </div>
                 <p className="thoughts-text">{selected.notes || "Nothing here yet. Add it from Edit."}</p>
                 {selected.reactionUrl && youtubeId(selected.reactionUrl) ? (
-                  <div className="reaction">
-                    <div className="reaction-label"><span aria-hidden="true">🎥</span> My Reaction</div>
-                    <div className="reaction-frame">
-                      <iframe
-                        src={`https://www.youtube.com/embed/${youtubeId(selected.reactionUrl)}`}
-                        title={`${selected.title} reaction`}
-                        loading="lazy"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                    </div>
+                  <div className="reaction-frame">
+                    <iframe
+                      src={`https://www.youtube-nocookie.com/embed/${youtubeId(selected.reactionUrl)}?rel=0&modestbranding=1`}
+                      title={`${selected.title} reaction`}
+                      loading="lazy"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
                   </div>
                 ) : null}
               </section>
