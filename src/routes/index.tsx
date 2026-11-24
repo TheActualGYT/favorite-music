@@ -1205,7 +1205,7 @@ function GridPulse({ color }: { color: string }) {
       const cols = Math.max(1, Math.ceil(sized.w / 40));
       const rows = Math.max(1, Math.ceil(sized.h / 40));
       const used = new Set(cells.map((cell) => `${cell.col}:${cell.row}`));
-      for (let tries = 0; tries < 16; tries += 1) {
+      for (let tries = 0; tries < 28; tries += 1) {
         const col = Math.floor(Math.random() * cols);
         const row = Math.floor(Math.random() * rows);
         const key = `${col}:${row}`;
@@ -1229,7 +1229,10 @@ function GridPulse({ color }: { color: string }) {
       canvas.style.transform = `translate3d(0, ${parent.scrollTop}px, 0)`;
       const width = sized.w;
       const height = sized.h;
-      while (cells.length < 26) {
+      const cols = Math.max(1, Math.ceil(width / 40));
+      const rows = Math.max(1, Math.ceil(height / 40));
+      const target = Math.min(72, Math.max(40, Math.round(cols * rows * 0.18)));
+      while (cells.length < target) {
         if (!place()) break;
       }
       ctx.clearRect(0, 0, width, height);
@@ -1247,20 +1250,20 @@ function GridPulse({ color }: { color: string }) {
         const fade = cell.age < attack
           ? 1 - (1 - cell.age / attack) ** 3
           : (1 - (cell.age - attack) / (1 - attack)) ** 1.35;
-        const alpha = Math.max(0, fade) * 0.4;
+        const alpha = Math.max(0, fade);
         ctx.save();
         ctx.beginPath();
-        ctx.rect(x + 1, y + 1, 38, 38);
+        ctx.rect(x, y, 40, 40);
         ctx.clip();
-        const glow = ctx.createRadialGradient(x + 20, y + 20, 2, x + 20, y + 20, 22);
+        ctx.globalAlpha = alpha * 0.5;
+        ctx.fillStyle = colorRef.current;
+        ctx.fillRect(x, y, 40, 40);
+        const glow = ctx.createRadialGradient(x + 20, y + 20, 4, x + 20, y + 20, 28);
         glow.addColorStop(0, colorRef.current);
         glow.addColorStop(1, "transparent");
-        ctx.globalAlpha = alpha * 0.95;
+        ctx.globalAlpha = alpha * 0.35;
         ctx.fillStyle = glow;
-        ctx.fillRect(x + 1, y + 1, 38, 38);
-        ctx.globalAlpha = alpha * 0.72;
-        ctx.fillStyle = colorRef.current;
-        ctx.fillRect(x + 1, y + 1, 38, 38);
+        ctx.fillRect(x, y, 40, 40);
         ctx.restore();
       }
       ctx.globalAlpha = 1;
