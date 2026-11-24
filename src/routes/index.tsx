@@ -1006,8 +1006,9 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
     const after = (ms: number, fn: () => void) => {
       pending.push(window.setTimeout(fn, ms));
     };
+    let awaitingSeek = false;
     const show = (index: number, mine: number) => {
-      if (dead || mine !== token) return;
+      if (dead || mine !== token || awaitingSeek) return;
       if (document.hidden) {
         after(400, () => show(index, mine));
         return;
@@ -1044,6 +1045,18 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
       send({ event: "command", func: "seekTo", args: [playFrom, true] });
       send({ event: "command", func: "playVideo", args: [] });
     };
+    const hold = () => {
+      shown = false;
+      baseline = null;
+      awaitingSeek = true;
+      token += 1;
+      setCovered(true);
+      if (document.hidden) return;
+      kick(armed);
+      after(900, () => {
+        if (!dead && awaitingSeek && !document.hidden) kick(armed);
+      });
+    };
     const onMessage = (event: MessageEvent) => {
       if (dead || document.hidden || typeof event.data !== "string") return;
       const frame = frames[armed].current;
@@ -1059,6 +1072,12 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
       const state = typeof info === "number" ? info : typeof info === "object" && info ? info.playerState : undefined;
       if (data.event === "onStateChange" && state !== 1) return;
       if (typeof time !== "number" || time < playFrom - 0.4) return;
+      if (awaitingSeek) {
+        if (time > playFrom + 1.1) return;
+        baseline = time;
+        awaitingSeek = false;
+        return;
+      }
       if (baseline === null) {
         baseline = time;
         return;
@@ -1075,16 +1094,7 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
       send({ event: "command", func: "mute", args: [] });
       send({ event: "command", func: "playVideo", args: [] });
     }, 250);
-    const onVis = () => {
-      shown = false;
-      baseline = null;
-      token += 1;
-      const mine = token;
-      setCovered(true);
-      if (document.hidden) return;
-      kick(armed);
-      after(7000, () => show(armed, mine));
-    };
+    const onVis = () => hold();
     after(7000, () => show(0, token));
     window.addEventListener("message", onMessage);
     document.addEventListener("visibilitychange", onVis);
@@ -1285,6 +1295,7 @@ function Home() {
   const [view, setView] = useState<View>("top-songs");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const opened = useRef(false);
   const [groupName, setGroupName] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [thoughtsOpen, setThoughtsOpen] = useState(false);
@@ -1299,6 +1310,11 @@ function Home() {
   const companyTried = useRef(new Set<number>());
   const [fact, setFact] = useState<{ field: "album" | "releaseDate" | "company" | "listPoints" | "duration"; value: string } | null>(null);
   useEffect(() => setFact(null), [selectedId]);
+  useEffect(() => {
+    if (opened.current || !songs.length) return;
+    opened.current = true;
+    setSelectedId((current) => current ?? songs[0].id);
+  }, [songs]);
 
   useEffect(() => {
     let dead = false;
@@ -2062,23 +2078,26 @@ function Home() {
                   <button type="button" className="thoughts-edit" onClick={() => setEditing(true)}>Edit</button>
                 </div>
                 <p className="thoughts-text">{selected.notes || "Nothing here yet. Add it from Edit."}</p>
+                {selected.reactionUrl && youtubeId(selected.reactionUrl) ? (
+                  <div className="reaction">
+                    <div className="reaction-label"><span aria-hidden="true">🎥</span> My Reaction</div>
+                    <div className="reaction-frame">
+                      <iframe
+                        src={`https://www.youtube.com/embed/${youtubeId(selected.reactionUrl)}`}
+                        title={`${selected.title} reaction`}
+                        loading="lazy"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                  </div>
+                ) : null}
               </section>
               {selected.videoId ? (
                 <div className="video">
                   <iframe
                     src={`https://www.youtube.com/embed/${selected.videoId}`}
                     title={`${selected.title} music video`}
-                    loading="lazy"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                </div>
-              ) : null}
-              {selected.reactionUrl && youtubeId(selected.reactionUrl) ? (
-                <div className="video">
-                  <iframe
-                    src={`https://www.youtube.com/embed/${youtubeId(selected.reactionUrl)}`}
-                    title={`${selected.title} reaction`}
                     loading="lazy"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
