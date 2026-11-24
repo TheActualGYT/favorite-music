@@ -36,7 +36,7 @@
 
 .app-shell {
   --nav-h: 62px;
-  --side-w: 30%;
+  --side-w: 27.5%;
   --seam: 7px;
   position: relative;
   display: flex;
@@ -423,19 +423,15 @@
   padding-right: 0;
   border-color: rgba(216, 196, 255, 0.55);
   background:
-    radial-gradient(130% 180% at 8% 50%, rgba(196, 181, 253, 0.55), rgba(124, 58, 237, 0.28) 46%, rgba(46, 32, 78, 0.72) 100%);
+    radial-gradient(130% 180% at 8% 50%, rgba(167, 139, 250, 0.36), rgba(109, 40, 217, 0.16) 48%, rgba(36, 28, 58, 0.55) 100%);
   box-shadow:
     inset 3px 0 0 #fff,
-    0 0 22px rgba(124, 58, 237, 0.32);
+    0 0 16px rgba(124, 58, 237, 0.18);
 }
 
 .row.is-selected:hover {
   background:
-    radial-gradient(130% 180% at 8% 50%, rgba(214, 202, 255, 0.62), rgba(139, 92, 246, 0.34) 46%, rgba(54, 36, 92, 0.76) 100%);
-}
-
-.row.is-selected .rank {
-  padding-left: 3px;
+    radial-gradient(130% 180% at 8% 50%, rgba(186, 168, 245, 0.42), rgba(124, 58, 237, 0.2) 48%, rgba(42, 32, 68, 0.58) 100%);
 }
 
 .row > .hero-clip {
@@ -451,8 +447,8 @@
   top: 50%;
   left: 50%;
   right: auto;
-  width: 160cqw;
-  height: 160cqw;
+  width: 148cqw;
+  height: 148cqw;
   max-width: none;
   aspect-ratio: auto;
   object-fit: cover;
@@ -464,17 +460,17 @@
 .rank {
   display: flex;
   box-sizing: border-box;
-  width: calc(2.2rem + (var(--rank-digits, 1) - 1) * 1.15rem);
+  width: calc(2.2rem + 2.5px + (var(--rank-digits, 1) - 1) * 1.15rem);
   flex: none;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  margin-left: -1px;
+  padding: 0 1.5px 0 0;
   color: #fff;
   font-size: 0.92rem;
   font-weight: 650;
   font-variant-numeric: tabular-nums lining-nums;
   text-align: center;
-  transition: padding-left 0.16s ease;
 }
 
 .rank.is-single {
@@ -953,6 +949,18 @@
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
 }
 
+.modal.edit-modal {
+  z-index: 80;
+  align-items: flex-start;
+  overflow: auto;
+  padding: 2.5rem 1rem;
+}
+
+.modal.edit-modal .modal-card {
+  width: min(34rem, 100%);
+  margin: auto;
+}
+
 .modal-card h2 {
   margin: 0 0 1rem;
 }
@@ -1138,7 +1146,7 @@
 
 .detail {
   --cover: #a78bfa;
-  max-width: 52rem;
+  max-width: 54.6rem;
 }
 
 .detail-hero,

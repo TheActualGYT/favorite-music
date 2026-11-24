@@ -19,6 +19,7 @@ type Song = {
   coverManual?: boolean;
   videoId?: string;
   videoUrl?: string;
+  reactionUrl?: string;
   clipStart?: number;
   clipUrl?: string;
   company?: string;
@@ -159,6 +160,7 @@ function loadSongs(): Song[] {
       coverManual: song.coverManual,
       videoId: song.videoId,
       videoUrl: song.videoUrl,
+      reactionUrl: song.reactionUrl,
       clipStart: song.clipStart,
       clipUrl: song.clipUrl,
       company: isPersonCompany(song.company) ? undefined : song.company?.replace(/\s*\([^)]*\)/g, "").trim() || undefined,
@@ -1936,19 +1938,6 @@ function Home() {
         >
           {selected ? <GridPulse color={coverColor} /> : null}
           {selected ? (
-            editing ? (
-              <SongForm
-                song={selected}
-                position={songs.findIndex((song) => song.id === selected.id) + 1}
-                total={songs.length}
-                onCancel={() => setEditing(false)}
-                onDelete={() => {
-                  removeSong(selected.id);
-                  setEditing(false);
-                }}
-                onSave={saveSong}
-              />
-            ) : (
             <article className="detail" style={{ "--cover": coverColor } as CSSProperties}>
               <div className="detail-hero">
                 {selected.videoId ? (
@@ -2085,9 +2074,19 @@ function Home() {
                   />
                 </div>
               ) : null}
+              {selected.reactionUrl && youtubeId(selected.reactionUrl) ? (
+                <div className="video">
+                  <iframe
+                    src={`https://www.youtube.com/embed/${youtubeId(selected.reactionUrl)}`}
+                    title={`${selected.title} reaction`}
+                    loading="lazy"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              ) : null}
               <GroupProfile artist={selected.artist} />
             </article>
-            )
           ) : groupName && showingArtists ? (
             <GroupDetail
               title={groupName}
@@ -2107,6 +2106,20 @@ function Home() {
           )}
         </main>
       </div>
+
+      {editing && selected ? (
+        <SongForm
+          song={selected}
+          position={songs.findIndex((song) => song.id === selected.id) + 1}
+          total={songs.length}
+          onCancel={() => setEditing(false)}
+          onDelete={() => {
+            removeSong(selected.id);
+            setEditing(false);
+          }}
+          onSave={saveSong}
+        />
+      ) : null}
 
       {adding ? (
         <AddModal
@@ -2208,6 +2221,7 @@ function SongForm({
         reader.readAsDataURL(coverFile);
       });
     }
+    const reactionUrl = String(form.get("reactionUrl") ?? "").trim();
     onSave(
       {
         ...song,
@@ -2222,6 +2236,7 @@ function SongForm({
         clipStart,
         videoUrl: nextVideoUrl,
         videoId: nextVideoId,
+        reactionUrl: reactionUrl || undefined,
         youtubeViews: videoChanged ? undefined : song.youtubeViews,
         youtubeAt: videoChanged ? undefined : song.youtubeAt,
       },
@@ -2229,15 +2244,17 @@ function SongForm({
     );
   }
 
-  return (
-    <form
-      className="detail edit-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        submit(new FormData(e.currentTarget));
-      }}
-    >
-      <h1>Edit {song.title}</h1>
+  const form = (
+    <div className="modal edit-modal" role="presentation" onClick={onCancel}>
+      <form
+        className="modal-card"
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          submit(new FormData(event.currentTarget));
+        }}
+      >
+      <h2>Edit {song.title}</h2>
       <div className="field">
         <label htmlFor="edit-title">Title</label>
         <input id="edit-title" name="title" defaultValue={song.title} required />
@@ -2289,6 +2306,15 @@ function SongForm({
         />
       </div>
       <div className="field">
+        <label htmlFor="edit-reaction">Reaction video</label>
+        <input
+          id="edit-reaction"
+          name="reactionUrl"
+          placeholder="Paste a YouTube link"
+          defaultValue={song.reactionUrl ?? ""}
+        />
+      </div>
+      <div className="field">
         <label htmlFor="edit-notes">My Thoughts</label>
         <textarea id="edit-notes" name="notes" defaultValue={song.notes} />
       </div>
@@ -2315,8 +2341,10 @@ function SongForm({
           Delete
         </button>
       </div>
-    </form>
+      </form>
+    </div>
   );
+  return typeof document === "undefined" ? form : createPortal(form, document.body);
 }
 
 function AddModal({
