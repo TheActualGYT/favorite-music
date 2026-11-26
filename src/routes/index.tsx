@@ -982,6 +982,125 @@ function parseTimestamp(value: string) {
   return Math.max(0, Math.round(total * 2) / 2);
 }
 
+function primaryArtist(artist: string) {
+  return artist.replace(/\s*[([]\s*(?:feat\.?|ft\.?|featuring|with)\b[^)\]]*[)\]]/gi, "").trim();
+}
+
+type VideoFrame = { left: number; top: number; width: number; height: number };
+const videoFrames = new Map<string, VideoFrame>();
+
+function loadFrameImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("image"));
+    img.src = src;
+  });
+}
+
+function measureFrame(img: HTMLImageElement): VideoFrame {
+  const width = 160;
+  const height = Math.max(1, Math.round((img.naturalHeight / img.naturalWidth) * width));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return { left: 0, top: 0, width: 1, height: 1 };
+  ctx.drawImage(img, 0, 0, width, height);
+  const pixels = ctx.getImageData(0, 0, width, height).data;
+  const barRow = (y: number) => {
+    let dark = 0;
+    for (let x = 0; x < width; x += 1) {
+      const i = (y * width + x) * 4;
+      if (pixels[i] < 16 && pixels[i + 1] < 16 && pixels[i + 2] < 16) dark += 1;
+    }
+    return dark / width > 0.97;
+  };
+  const barCol = (x: number) => {
+    let dark = 0;
+    for (let y = 0; y < height; y += 1) {
+      const i = (y * width + x) * 4;
+      if (pixels[i] < 16 && pixels[i + 1] < 16 && pixels[i + 2] < 16) dark += 1;
+    }
+    return dark / height > 0.97;
+  };
+  let top = 0;
+  let bottom = height - 1;
+  let left = 0;
+  let right = width - 1;
+  while (top < bottom && barRow(top)) top += 1;
+  while (bottom > top && barRow(bottom)) bottom -= 1;
+  while (left < right && barCol(left)) left += 1;
+  while (right > left && barCol(right)) right -= 1;
+  const imageRatio = img.naturalWidth / img.naturalHeight;
+  const contentRatio = ((right - left + 1) / width) / ((bottom - top + 1) / height) * imageRatio;
+  const player = 16 / 9;
+  let frame: VideoFrame;
+  if (Math.abs(imageRatio - player) < 0.08) {
+    frame = {
+      left: left / width,
+      top: top / height,
+      width: (right - left + 1) / width,
+      height: (bottom - top + 1) / height,
+    };
+  } else if (contentRatio < player) {
+    const box = contentRatio / player;
+    frame = { left: (1 - box) / 2, top: 0, width: box, height: 1 };
+  } else {
+    const box = player / contentRatio;
+    frame = { left: 0, top: (1 - box) / 2, width: 1, height: box };
+  }
+  if (frame.width < 0.35 || frame.height < 0.35) return { left: 0, top: 0, width: 1, height: 1 };
+  const inset = 0.012;
+  return {
+    left: frame.left + frame.width * inset,
+    top: frame.top + frame.height * inset,
+    width: frame.width * (1 - inset * 2),
+    height: frame.height * (1 - inset * 2),
+  };
+}
+
+async function videoFrame(videoId: string) {
+  const cached = videoFrames.get(videoId);
+  if (cached) return cached;
+  const sources = [
+    `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
+    `https://i.ytimg.com/vi/${videoId}/hq720.jpg`,
+    `https://i.ytimg.com/vi/${videoId}/sddefault.jpg`,
+  ];
+  for (const src of sources) {
+    try {
+      const img = await loadFrameImage(src);
+      if (img.naturalWidth < 200) continue;
+      const ratio = img.naturalWidth / img.naturalHeight;
+      if (Math.abs(ratio - 4 / 3) < 0.05) continue;
+      const frame = measureFrame(img);
+      videoFrames.set(videoId, frame);
+      return frame;
+    } catch {
+      // try the next thumbnail
+    }
+  }
+  const frame = { left: 0, top: 0, width: 1, height: 1 };
+  videoFrames.set(videoId, frame);
+  return frame;
+}
+
+function frameStyle(frame: VideoFrame, rect: DOMRect): CSSProperties {
+  if (rect.width < 2 || rect.height < 2) return {};
+  const width = Math.max(rect.width / frame.width, (rect.height * 16) / (9 * frame.height));
+  const height = (width * 9) / 16;
+  const centerX = (frame.left + frame.width / 2) * width;
+  const centerY = (frame.top + frame.height / 2) * height;
+  return {
+    width,
+    height,
+    left: rect.width / 2 - centerX,
+    top: rect.height / 2 - centerY,
+    transform: "none",
+  };
+}
 function embedSrc(videoId: string, from: number, to: number) {
   const params = new URLSearchParams({
     autoplay: "1",
@@ -1006,10 +1125,12 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
   const poster = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
   const playFrom = Math.max(0, start - 4);
   const clipEnd = start + 24;
+  const box = useRef<HTMLDivElement>(null);
   const frames = [useRef<HTMLIFrameElement>(null), useRef<HTMLIFrameElement>(null)];
   const [covered, setCovered] = useState(true);
   const [instant, setInstant] = useState(false);
   const [active, setActive] = useState(0);
+  const [fit, setFit] = useState<CSSProperties>({});
   const [srcs, setSrcs] = useState<[string, string]>([`${embedSrc(videoId, playFrom, clipEnd)}&r=1`, ""]);
   useEffect(() => {
     let dead = false;
@@ -1124,8 +1245,30 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
       pending.forEach((id) => window.clearTimeout(id));
     };
   }, [videoId, start, playFrom, clipEnd]);
+  useEffect(() => {
+    const node = box.current;
+    if (!node) return;
+    let dead = false;
+    let frame: VideoFrame = { left: 0, top: 0, width: 1, height: 1 };
+    const apply = () => {
+      const rect = node.getBoundingClientRect();
+      setFit(frameStyle(frame, rect));
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(node);
+    videoFrame(videoId).then((next) => {
+      if (dead) return;
+      frame = next;
+      apply();
+    });
+    return () => {
+      dead = true;
+      observer.disconnect();
+    };
+  }, [videoId]);
   return (
-    <div className="hero-clip" aria-hidden="true">
+    <div className="hero-clip" ref={box} aria-hidden="true">
       {[0, 1].map((index) => (
         <div key={index} className={active === index ? "clip-slot is-on" : "clip-slot"}>
           {srcs[index] ? (
@@ -1134,6 +1277,7 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
               ref={frames[index]}
               src={srcs[index]}
               title=""
+              style={fit}
               allow="autoplay; encrypted-media"
               tabIndex={-1}
             />
@@ -1141,7 +1285,7 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
         </div>
       ))}
       <div className={covered ? `clip-cover${instant ? " is-instant" : ""}` : "clip-cover is-off"}>
-        <img src={poster} alt="" />
+        <img src={poster} alt="" style={fit} />
       </div>
     </div>
   );
@@ -1409,7 +1553,7 @@ function Home() {
       const updates = new Map<number, string>();
       for (const song of filteredSongs) {
         if (song.coverManual) continue;
-        const track = await fetchTrack(song.title, song.artist, song.album);
+        const track = await fetchTrack(song.title, primaryArtist(song.artist), song.album);
         if (track?.coverUrl && track.coverUrl !== song.coverUrl) updates.set(song.id, track.coverUrl);
       }
       if (!updates.size) return;
@@ -1435,9 +1579,9 @@ function Home() {
       for (const song of missing) {
         const [track, videoId] = await Promise.all([
           !song.coverUrl || !song.album || !song.releaseDate || (!song.durationMs && !song.durationManual)
-            ? fetchTrack(song.title, song.artist, song.album)
+            ? fetchTrack(song.title, primaryArtist(song.artist), song.album)
             : Promise.resolve(null),
-          !song.videoId ? fetchVideo(song.title, song.artist) : Promise.resolve(null),
+          !song.videoId ? fetchVideo(song.title, primaryArtist(song.artist)) : Promise.resolve(null),
         ]);
         const patch: Partial<Song> = {};
         if (track?.coverUrl && !song.coverUrl) patch.coverUrl = track.coverUrl;
@@ -1469,13 +1613,13 @@ function Home() {
 
   useEffect(() => {
     const fixes = songs.filter((song) => {
-      const known = knownLabel(song.artist, song.title);
+      const known = knownLabel(primaryArtist(song.artist), song.title);
       return known && song.company !== known.company;
     });
     if (fixes.length > 0) {
       setSongs((prev) => {
         const next = prev.map((song) => {
-          const known = knownLabel(song.artist, song.title);
+          const known = knownLabel(primaryArtist(song.artist), song.title);
           return known && song.company !== known.company ? { ...song, company: known.company, subLabel: undefined } : song;
         });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
@@ -1490,7 +1634,7 @@ function Home() {
       for (const song of missing) {
         if (cancelled) return;
         companyTried.current.add(song.id);
-        const label = await lookupCompany(song.artist, song.title);
+        const label = await lookupCompany(primaryArtist(song.artist), song.title);
         if (label) {
           setSongs((prev) => {
             const next = prev.map((item) =>
@@ -1521,7 +1665,7 @@ function Home() {
       ...new Set(
         songs
           .filter((song) => !song.spotifyStreams || !song.spotifyAt || now - song.spotifyAt > COUNT_STALE)
-          .map((song) => song.artist),
+          .map((song) => primaryArtist(song.artist)),
       ),
     ].filter((artist) => !countsTried.current.has(artist));
     if (staleYouTube.length === 0 && staleArtists.length === 0) return;
@@ -1574,7 +1718,7 @@ function Home() {
         setSongs((prev) => {
           let changed = false;
           const next = prev.map((song) => {
-            if (song.artist !== artist) return song;
+            if (primaryArtist(song.artist) !== artist) return song;
             const full = song.title.toLowerCase().replace(/[^a-z0-9]/g, "");
             const loose = song.title
               .toLowerCase()
@@ -1634,7 +1778,7 @@ function Home() {
     );
     if (actFilters.length) {
       list = list.filter((song) => {
-        const kind = actKind(song.artist);
+        const kind = actKind(primaryArtist(song.artist));
         if (!kind) return false;
         if (actFilters.includes("soloist") && (kind === "male-solo" || kind === "female-solo")) return true;
         if (actFilters.includes(kind)) return true;
@@ -2207,7 +2351,7 @@ function Home() {
                   />
                 </div>
               ) : null}
-              <GroupProfile artist={selected.artist} />
+              <GroupProfile artist={primaryArtist(selected.artist)} />
             </article>
           ) : groupName && showingArtists ? (
             <GroupDetail
@@ -2486,9 +2630,9 @@ function AddModal({
     if (!title || !artist) return;
     setBusy(true);
     const [track, videoId, label] = await Promise.all([
-      fetchTrack(title, artist),
-      fetchVideo(title, artist),
-      lookupCompany(artist, title),
+      fetchTrack(title, primaryArtist(artist)),
+      fetchVideo(title, primaryArtist(artist)),
+      lookupCompany(primaryArtist(artist), title),
     ]);
     const position = Number(form.get("position") ?? nextPosition);
     const clipStart = parseTimestamp(String(form.get("clipStart") ?? ""));
