@@ -37,7 +37,7 @@
 .app-shell {
   --nav-h: 62px;
   --side-w: 27.5%;
-  --seam: 7px;
+  --seam: 2px;
   position: relative;
   display: flex;
   height: 100%;
@@ -256,66 +256,18 @@
   left: 0;
   right: 0;
   height: var(--seam);
-  box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 #fff;
 }
 
 .seam-v {
-  top: calc(var(--nav-h) + var(--seam) - 1px);
+  top: calc(var(--nav-h) + var(--seam));
   bottom: 0;
   left: calc(var(--side-w) - var(--seam));
   width: var(--seam);
-  box-shadow: inset 1px 0 0 #fff, inset -1px 0 0 #fff;
 }
 
 .seam-h > i,
 .seam-v > i {
-  position: absolute;
-  top: 1px;
-  bottom: 1px;
-  height: auto;
-  width: 200vw;
-  background: linear-gradient(
-    90deg,
-    #ffffff 0%,
-    #fde8f4 4%,
-    #f6c6e6 8%,
-    #ecc8f4 12%,
-    #dfd0ff 16%,
-    #cbb6fd 20%,
-    #b197f8 23%,
-    #8b5cf6 25%,
-    #b197f8 27%,
-    #cbb6fd 30%,
-    #dfd0ff 34%,
-    #ecc8f4 38%,
-    #f6c6e6 42%,
-    #fde8f4 46%,
-    #ffffff 50%,
-    #fde8f4 54%,
-    #f6c6e6 58%,
-    #ecc8f4 62%,
-    #dfd0ff 66%,
-    #cbb6fd 70%,
-    #b197f8 73%,
-    #8b5cf6 75%,
-    #b197f8 77%,
-    #cbb6fd 80%,
-    #dfd0ff 84%,
-    #ecc8f4 88%,
-    #f6c6e6 92%,
-    #fde8f4 96%,
-    #ffffff 100%
-  );
-  animation: seam-flow 22s linear infinite;
-}
-
-.seam-h > i { left: 0; }
-
-.seam-v > i { left: calc(-30vw + var(--seam)); }
-
-@keyframes seam-flow {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(-50%, 0, 0); }
+  display: none;
 }
 
 .workspace {
@@ -342,7 +294,74 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.6rem;
   padding: 1.15rem 1.25rem 0.6rem;
+}
+
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.filter-wrap {
+  position: relative;
+}
+
+.filter-btn {
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 0.5rem;
+  padding: 0.38rem 0.7rem;
+  background: transparent;
+  color: #eee;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.filter-btn.is-on,
+.filter-btn:hover {
+  border-color: #fff;
+  color: #fff;
+}
+
+.filter-pop {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 30;
+  width: 13.5rem;
+  padding: 0.7rem 0.75rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 0.75rem;
+  background: #1a1a1e;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.filter-pop p {
+  margin: 0.35rem 0 0.3rem;
+  color: #9a9a9a;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.filter-pop p:first-child {
+  margin-top: 0;
+}
+
+.filter-pop label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.22rem 0;
+  color: #eee;
+  font-size: 0.82rem;
+}
+
+.filter-pop input {
+  accent-color: #a78bfa;
 }
 
 .sidebar-head h2 {
@@ -1098,7 +1117,41 @@
   }
 }
 
-@media (max-width: 800px) {
+@media (max-width: 1400px) {
+  .main { --pad: 1.35rem; }
+  .detail-hero { gap: 0.9rem; margin-bottom: 1rem; padding: 0.8rem; }
+  .meta-grid { gap: 0.45rem; margin-bottom: 0.45rem; }
+  .meta-4 { margin-bottom: 0.75rem; }
+  .thoughts { margin-top: 0.75rem; padding: 0.85rem 0.95rem 0.9rem; }
+  .video { margin-top: 0.75rem; }
+  .members { margin-top: 0.75rem; }
+  .members-grid { gap: 0.45rem; }
+}
+
+@media (max-width: 1180px) {
+  .main { --pad: 0.85rem; }
+  .detail-hero { gap: 0.6rem; margin-bottom: 0.7rem; padding: 0.6rem; }
+  .detail-cover { width: 104px; height: 104px; }
+  .detail h1 { font-size: 1.7rem; }
+  .detail .byline { font-size: 0.98rem; }
+  .detail-rank { font-size: 1.25rem; }
+  .card, .count { padding: 0.6rem 0.65rem; }
+  .thoughts-avatar { width: 64px; height: 64px; }
+  .thoughts-head { font-size: 1.15rem; }
+  .members-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 980px) {
+  .main { --pad: 0.65rem; }
+  .meta-3, .meta-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .detail-cover { width: 84px; height: 84px; }
+  .detail h1 { font-size: 1.4rem; }
+  .members-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .reaction-head { max-width: 9.5rem; }
+  .reaction-frame { width: 8.5rem; }
+}
+
+@media (max-width: 680px) {
   .nav {
     height: auto;
     min-height: 62px;
@@ -1122,11 +1175,6 @@
 
   .seam-v {
     display: none;
-  }
-
-  .main {
-    --pad: 1.25rem;
-    padding: var(--pad);
   }
 }
 

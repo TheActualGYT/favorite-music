@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { getSpotifyStreams } from "../lib/spotify";
 import { getCompany } from "../lib/company";
 import { getGroup, getIdolPhoto } from "../lib/group";
+import { actKind } from "../lib/acts";
 
 export const Route = createFileRoute("/")({ component: Home });
 
@@ -1317,6 +1318,9 @@ function Home() {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [thoughtsOpen, setThoughtsOpen] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [actFilters, setActFilters] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<"" | "year" | "streams" | "views">("");
   const [editing, setEditing] = useState(false);
   const [coverColor, setCoverColor] = useState("#a78bfa");
   const closeTimer = useRef<number | null>(null);
@@ -1327,6 +1331,16 @@ function Home() {
   const companyTried = useRef(new Set<number>());
   const [fact, setFact] = useState<{ field: "album" | "releaseDate" | "company" | "listPoints" | "duration"; value: string } | null>(null);
   useEffect(() => setFact(null), [selectedId]);
+  useEffect(() => {
+    if (!filterOpen) return;
+    const close = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest(".filter-wrap")) return;
+      setFilterOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [filterOpen]);
   useEffect(() => {
     if (opened.current || !songs.length) return;
     opened.current = true;
@@ -1393,7 +1407,7 @@ function Home() {
     localStorage.setItem("gyt-cover-fix", "2");
     (async () => {
       const updates = new Map<number, string>();
-      for (const song of songs) {
+      for (const song of filteredSongs) {
         if (song.coverManual) continue;
         const track = await fetchTrack(song.title, song.artist, song.album);
         if (track?.coverUrl && track.coverUrl !== song.coverUrl) updates.set(song.id, track.coverUrl);
@@ -1611,18 +1625,35 @@ function Home() {
   const q = query.trim().toLowerCase();
 
   const filteredSongs = useMemo(() => {
-    return songs.filter(
-      (s) =>
+    let list = songs.filter(
+      (song) =>
         !q ||
-        s.title.toLowerCase().includes(q) ||
-        s.artist.toLowerCase().includes(q) ||
-        s.album.toLowerCase().includes(q),
+        song.title.toLowerCase().includes(q) ||
+        song.artist.toLowerCase().includes(q) ||
+        song.album.toLowerCase().includes(q),
     );
-  }, [songs, q]);
+    if (actFilters.length) {
+      list = list.filter((song) => {
+        const kind = actKind(song.artist);
+        if (!kind) return false;
+        if (actFilters.includes("soloist") && (kind === "male-solo" || kind === "female-solo")) return true;
+        if (actFilters.includes(kind)) return true;
+        return false;
+      });
+    }
+    if (sortBy === "year") {
+      list = [...list].sort((a, b) => (b.releaseDate || "").localeCompare(a.releaseDate || ""));
+    } else if (sortBy === "streams") {
+      list = [...list].sort((a, b) => (b.spotifyStreams || 0) - (a.spotifyStreams || 0));
+    } else if (sortBy === "views") {
+      list = [...list].sort((a, b) => (b.youtubeViews || 0) - (a.youtubeViews || 0));
+    }
+    return list;
+  }, [songs, q, actFilters, sortBy]);
 
   const artistRows = useMemo(() => {
     const map = new Map<string, Song[]>();
-    for (const song of songs) {
+    for (const song of filteredSongs) {
       const key = song.artist || "Unknown";
       if (q && !key.toLowerCase().includes(q) && !song.title.toLowerCase().includes(q)) continue;
       const bucket = map.get(key) ?? [];
@@ -1641,11 +1672,11 @@ function Home() {
       rows.sort((a, b) => a.name.localeCompare(b.name));
     }
     return rows;
-  }, [songs, q, view]);
+  }, [filteredSongs, q, view]);
 
   const albumRows = useMemo(() => {
     const map = new Map<string, Song[]>();
-    for (const song of songs) {
+    for (const song of filteredSongs) {
       const key = song.album || "Single";
       if (q && !key.toLowerCase().includes(q) && !song.title.toLowerCase().includes(q)) continue;
       const bucket = map.get(key) ?? [];
@@ -1665,7 +1696,7 @@ function Home() {
       rows.sort((a, b) => a.name.localeCompare(b.name));
     }
     return rows;
-  }, [songs, q, view]);
+  }, [filteredSongs, q, view]);
 
   const showingSongs = view === "songs" || view === "top-songs";
   const showingArtists = view === "top-artists" || view === "all-artists";
@@ -1829,9 +1860,57 @@ function Home() {
         <aside className="sidebar">
           <div className="sidebar-head">
             <h2>{heading}</h2>
-            <button type="button" className="add-btn" onClick={() => setAdding(true)}>
-              + Add
-            </button>
+            <div className="head-actions">
+              <div className="filter-wrap">
+                <button
+                  type="button"
+                  className={actFilters.length || sortBy ? "filter-btn is-on" : "filter-btn"}
+                  onClick={() => setFilterOpen((open) => !open)}
+                >
+                  Filter
+                </button>
+                {filterOpen ? (
+                  <div className="filter-pop">
+                    <p>Type</p>
+                    {[
+                      ["male-group", "Male group"],
+                      ["female-group", "Female group"],
+                      ["unisex-group", "Unisex group"],
+                      ["soloist", "Soloist"],
+                      ["male-solo", "Male soloist"],
+                      ["female-solo", "Female soloist"],
+                    ].map(([id, label]) => (
+                      <label key={id}>
+                        <input
+                          type="checkbox"
+                          checked={actFilters.includes(id)}
+                          onChange={() => setActFilters((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                    <p>Sort</p>
+                    {[
+                      ["year", "Year release"],
+                      ["streams", "Most streamed"],
+                      ["views", "Most viewed"],
+                    ].map(([id, label]) => (
+                      <label key={id}>
+                        <input
+                          type="checkbox"
+                          checked={sortBy === id}
+                          onChange={() => setSortBy((current) => current === id ? "" : id as "year" | "streams" | "views")}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <button type="button" className="add-btn" onClick={() => setAdding(true)}>
+                + Add
+              </button>
+            </div>
           </div>
           <input
             className="search"
@@ -1842,15 +1921,19 @@ function Home() {
           />
           {showingSongs ? (
             filteredSongs.length === 0 ? (
+              songs.length === 0 ? (
               <p className="empty">
                 No favorite songs yet.
                 <br />
                 Click <strong>+ Add</strong> to get started.
               </p>
+              ) : (
+              <p className="empty">No songs match that filter.</p>
+              )
             ) : (
               <div
                 className="list"
-                style={{ "--rank-digits": String(Math.max(1, String(filteredSongs.length).length)) } as CSSProperties}
+                style={{ "--rank-digits": String(Math.max(1, String(songs.length).length)) } as CSSProperties}
               >
                 {filteredSongs.map((song, index) => {
                   const selected = song.id === selectedId;
@@ -1876,7 +1959,7 @@ function Home() {
                     {selected && song.videoId ? (
                       <HeroClip scope="row" videoId={song.videoId} start={song.clipStart ?? 15} />
                     ) : null}
-                    <span className={index + 1 < 10 ? "rank is-single" : "rank"}>#{index + 1}</span>
+                    <span className={(songs.findIndex((item) => item.id === song.id) + 1) < 10 ? "rank is-single" : "rank"}>#{songs.findIndex((item) => item.id === song.id) + 1}</span>
                     <span className="cover-frame">
                       {song.coverUrl ? (
                         <img className="cover" src={song.coverUrl} alt="" />
