@@ -581,6 +581,10 @@ const FLAGS: Record<string, string> = {
   china: "cn",
   taiwan: "tw",
   thailand: "th",
+  philippines: "ph",
+  "the philippines": "ph",
+  filipino: "ph",
+  ph: "ph",
   "new zealand": "nz",
   "united kingdom": "gb",
   uk: "gb",
@@ -589,6 +593,15 @@ const FLAGS: Record<string, string> = {
 function flagSrc(country: string) {
   const code = FLAGS[country.toLowerCase().trim()] ?? "";
   return code ? `https://flagcdn.com/w40/${code}.png` : "";
+}
+
+function withCountry<T extends { name: string; country: string }>(artist: string, member: T) {
+  const group = artist.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const name = member.name.toLowerCase().replace(/[^a-z]/g, "");
+  if ((group === "idntt" || group === "identity") && name === "kimjihoo") {
+    return { ...member, country: "Philippines" };
+  }
+  return member;
 }
 
 const GROUP_PROFILES: Record<string, ProfileInfo[]> = {
@@ -780,7 +793,7 @@ function GroupProfile({ artist }: { artist: string }) {
   const base = roster;
   if (!base?.length) return null;
   const members = base
-    .map((member) => ({ ...member, ...info[cropId(artist, member.name)], sourceName: member.name }))
+    .map((member) => withCountry(artist, { ...member, ...info[cropId(artist, member.name)], sourceName: member.name }))
     .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
   const active = members.find((member) => member.sourceName === editing);
   const activeSaved = active ? crops[cropId(artist, active.sourceName)] : undefined;
@@ -2073,9 +2086,20 @@ function Home() {
                   ) : null}
                 </div>
                 {selected.reactionUrl && youtubeId(selected.reactionUrl) ? (
-                  <div className="thoughts-head reaction-head">
-                    <span>My Reaction</span>
-                    <span className="bulb film" aria-hidden="true">🎥</span>
+                  <div className="reaction-head">
+                    <div className="thoughts-head">
+                      <span>My Reaction</span>
+                      <span className="bulb film" aria-hidden="true">🎥</span>
+                    </div>
+                    <div className="reaction-frame">
+                      <iframe
+                        src={`https://www.youtube-nocookie.com/embed/${youtubeId(selected.reactionUrl)}?rel=0&modestbranding=1`}
+                        title={`${selected.title} reaction`}
+                        loading="lazy"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
                   </div>
                 ) : null}
                 <div className="thoughts-head">
@@ -2088,17 +2112,6 @@ function Home() {
                   <button type="button" className="thoughts-edit" onClick={() => setEditing(true)}>Edit</button>
                 </div>
                 <p className="thoughts-text">{selected.notes || "Nothing here yet. Add it from Edit."}</p>
-                {selected.reactionUrl && youtubeId(selected.reactionUrl) ? (
-                  <div className="reaction-frame">
-                    <iframe
-                      src={`https://www.youtube-nocookie.com/embed/${youtubeId(selected.reactionUrl)}?rel=0&modestbranding=1`}
-                      title={`${selected.title} reaction`}
-                      loading="lazy"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  </div>
-                ) : null}
               </section>
               {selected.videoId ? (
                 <div className="video">
