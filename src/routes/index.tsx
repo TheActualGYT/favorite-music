@@ -45,6 +45,8 @@ type View =
   | "all-albums";
 
 const STORAGE_KEY = "favoriteSongs";
+const WIPE_KEY = "gyt-list-wipe";
+const WIPE_VERSION = "clear-all-1";
 const LIBRARY_KEYS = [
   STORAGE_KEY,
   "gyt-group-roster",
@@ -1462,6 +1464,24 @@ function Home() {
   useEffect(() => {
     let dead = false;
     (async () => {
+      if (localStorage.getItem(WIPE_KEY) !== WIPE_VERSION) {
+        libraryPause = true;
+        localStorage.setItem(STORAGE_KEY, "[]");
+        localStorage.setItem(WIPE_KEY, WIPE_VERSION);
+        libraryPause = false;
+        setSongs([]);
+        setSelectedId(null);
+        try {
+          await fetch(libraryEndpoint(), {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ data: { [STORAGE_KEY]: [] } }),
+          });
+        } catch {
+          /* the local list is already empty */
+        }
+        return;
+      }
       const local = snapshotLibrary();
       try {
         const response = await fetch(libraryEndpoint());
