@@ -459,6 +459,8 @@
   width: 48%;
   background: #111;
   container-type: size;
+  -webkit-mask-image: linear-gradient(to left, #000 50%, transparent 100%);
+  mask-image: linear-gradient(to left, #000 50%, transparent 100%);
 }
 
 .row > .hero-clip .clip-slot iframe,
@@ -1288,6 +1290,8 @@
 
 .detail-hero .hero-clip {
   width: 54%;
+  -webkit-mask-image: linear-gradient(to left, #000 42%, transparent 100%);
+  mask-image: linear-gradient(to left, #000 42%, transparent 100%);
 }
 .detail-hero .edit-btn,
 .detail-copy,
