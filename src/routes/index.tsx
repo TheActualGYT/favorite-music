@@ -708,6 +708,25 @@ function GroupProfile({ artist }: { artist: string }) {
     setColors(loadColors());
   }, [key]);
   useEffect(() => {
+    if (key === "nmixx" && localStorage.getItem("gyt-lily-photo") !== "1") {
+      const saved = loadRoster();
+      if (saved.nmixx) {
+        saved.nmixx = saved.nmixx.map((member) =>
+          member.name.toLowerCase() === "lily"
+            ? { ...member, photo: "https://static.wikia.nocookie.net/nmixx/images/7/7e/Lily_Strange_Muse_Profile_Photo.jpg/revision/latest/scale-to-width-down/800?cb=20261002150052" }
+            : member,
+        );
+        localStorage.setItem(ROSTER_KEY, JSON.stringify(saved));
+      }
+      const crops = loadStore(PROFILE_CROP_KEY);
+      const lily = crops["nmixx:lily"];
+      if (lily?.photo?.includes("kpopping.com")) {
+        delete lily.photo;
+        localStorage.setItem(PROFILE_CROP_KEY, JSON.stringify(crops));
+      }
+      localStorage.setItem("gyt-lily-photo", "1");
+      window.dispatchEvent(new Event("gyt-roster"));
+    }
     if (key === "aespa" && localStorage.getItem("gyt-image-reset-v") !== "aespa-1") {
       const crops = loadStore(PROFILE_CROP_KEY);
       for (const id of Object.keys(crops)) {
