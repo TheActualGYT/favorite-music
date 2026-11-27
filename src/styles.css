@@ -421,7 +421,7 @@
   margin-bottom: 0.55rem;
   border: 1px solid #3c3c3c;
   border-radius: 0.65rem;
-  padding: 0.5rem 0.7rem 0.5rem 0;
+  padding: 0.5rem 0.7rem 0.5rem 0.15rem;
   background: #3a3a3a;
   color: inherit;
   font: inherit;
@@ -454,6 +454,10 @@
     radial-gradient(130% 180% at 8% 50%, rgba(186, 168, 245, 0.42), rgba(124, 58, 237, 0.2) 48%, rgba(42, 32, 68, 0.58) 100%);
 }
 
+.row.is-selected .rank {
+  padding-left: 3px;
+}
+
 .row > .hero-clip {
   right: 0;
   width: 48%;
@@ -472,12 +476,11 @@
 .rank {
   display: flex;
   box-sizing: border-box;
-  width: calc(2.2rem + 2.5px + (var(--rank-digits, 1) - 1) * 1.15rem);
+  width: calc(2.6rem + (var(--rank-digits, 1) - 1) * 1.15rem);
   flex: none;
   align-items: center;
   justify-content: center;
-  margin-left: -1px;
-  padding: 0 1.5px 0 0;
+  padding: 0;
   color: #fff;
   font-size: 0.92rem;
   font-weight: 650;

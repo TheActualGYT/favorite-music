@@ -257,8 +257,8 @@ async function fetchTrack(title: string, artist: string, album = ""): Promise<Tr
       const hits = results.filter((item) => {
         const track = plain(item.trackName || "");
         const by = plain(item.artistName || "");
-        const titleOk = track === titleKey || track.startsWith(titleKey);
-        const artistOk = artistKey.length > 1 && (by.includes(artistKey) || artistKey.includes(by));
+        const titleOk = track === titleKey || track.startsWith(titleKey) || titleKey.startsWith(track);
+        const artistOk = !artistKey || artistKey.length < 2 || by.includes(artistKey) || artistKey.includes(by);
         return titleOk && artistOk;
       });
       const match =
@@ -1582,6 +1582,7 @@ function Home() {
         if (track?.durationMs && !song.durationMs && !song.durationManual) patch.durationMs = track.durationMs;
         if (videoId && !song.videoId && !song.videoUrl) patch.videoId = videoId;
         if (Object.keys(patch).length > 0) found.set(song.id, patch);
+        else if (!track && (!song.coverUrl || !song.album || !song.releaseDate)) coverTried.current.delete(song.id);
       }
       if (cancelled || found.size === 0) return;
       setSongs((prev) => {
@@ -2640,6 +2641,7 @@ function AddModal({
         coverUrl: track?.coverUrl,
         videoId: videoId ?? undefined,
         clipStart,
+        durationMs: track?.durationMs,
         company: label?.company?.replace(/\s*\([^)]*\)/g, "").trim(),
         subLabel: undefined,
       },
