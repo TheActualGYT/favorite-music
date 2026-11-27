@@ -45,8 +45,6 @@ type View =
   | "all-albums";
 
 const STORAGE_KEY = "favoriteSongs";
-const WIPE_KEY = "gyt-list-wipe";
-const WIPE_VERSION = "clear-all-2";
 const LIBRARY_KEYS = [
   STORAGE_KEY,
   "gyt-group-roster",
@@ -147,10 +145,6 @@ if (typeof window !== "undefined") hookLibrary();
 
 function loadSongs(): Song[] {
   try {
-    if (typeof window !== "undefined" && localStorage.getItem(WIPE_KEY) === WIPE_VERSION) {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw || raw === "[]") return [];
-    }
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Array<Song & { year?: string; genre?: string }>;
@@ -1468,24 +1462,6 @@ function Home() {
   useEffect(() => {
     let dead = false;
     (async () => {
-      if (localStorage.getItem(WIPE_KEY) !== WIPE_VERSION) {
-        libraryPause = true;
-        localStorage.setItem(STORAGE_KEY, "[]");
-        localStorage.setItem(WIPE_KEY, WIPE_VERSION);
-        libraryPause = false;
-        setSongs([]);
-        setSelectedId(null);
-        try {
-          await fetch(libraryEndpoint(), {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ data: { [STORAGE_KEY]: [] } }),
-          });
-        } catch {
-          /* the local list is already empty */
-        }
-        return;
-      }
       const local = snapshotLibrary();
       try {
         const response = await fetch(libraryEndpoint());
