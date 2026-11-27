@@ -1117,14 +1117,11 @@ function embedSrc(videoId: string, from: number, to: number) {
 function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; start?: number; scope?: string }) {
   const playFrom = Math.max(0, start - 4);
   const clipEnd = start + 24;
-  const box = useRef<HTMLDivElement>(null);
   const frames = [useRef<HTMLIFrameElement>(null), useRef<HTMLIFrameElement>(null)];
   const [covered, setCovered] = useState(true);
   const [instant, setInstant] = useState(false);
   const [active, setActive] = useState(0);
-  const [poster, setPoster] = useState(`/api/thumb?v=${videoId}`);
-  const [posterFit, setPosterFit] = useState<CSSProperties>({});
-  const [playerFit, setPlayerFit] = useState<CSSProperties>({});
+  const poster = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
   const [srcs, setSrcs] = useState<[string, string]>([`${embedSrc(videoId, playFrom, clipEnd)}&r=1`, ""]);
   useEffect(() => {
     let dead = false;
@@ -1239,32 +1236,8 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
       pending.forEach((id) => window.clearTimeout(id));
     };
   }, [videoId, start, playFrom, clipEnd]);
-  useEffect(() => {
-    const node = box.current;
-    if (!node) return;
-    let dead = false;
-    let fit: VideoFit = { poster: `/api/thumb?v=${videoId}`, image: { left: 0, top: 0, width: 1, height: 1 }, ratio: 16 / 9 };
-    const apply = () => {
-      const rect = node.getBoundingClientRect();
-      setPoster(fit.poster);
-      setPosterFit(placed(fit.image, fit.ratio, rect, fit.ratio));
-      setPlayerFit(placed(playerFrame(fit.image, fit.ratio), 16 / 9, rect, 16 / 9));
-    };
-    apply();
-    const observer = new ResizeObserver(apply);
-    observer.observe(node);
-    videoFit(videoId).then((next) => {
-      if (dead) return;
-      fit = next;
-      apply();
-    });
-    return () => {
-      dead = true;
-      observer.disconnect();
-    };
-  }, [videoId]);
   return (
-    <div className="hero-clip" ref={box} aria-hidden="true">
+    <div className="hero-clip" aria-hidden="true">
       {[0, 1].map((index) => (
         <div key={index} className={active === index ? "clip-slot is-on" : "clip-slot"}>
           {srcs[index] ? (
@@ -1273,7 +1246,6 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
               ref={frames[index]}
               src={srcs[index]}
               title=""
-              style={playerFit}
               allow="autoplay; encrypted-media"
               tabIndex={-1}
             />
@@ -1281,7 +1253,7 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
         </div>
       ))}
       <div className={covered ? `clip-cover${instant ? " is-instant" : ""}` : "clip-cover is-off"}>
-        <img src={poster} alt="" style={posterFit} />
+        <img src={poster} alt="" />
       </div>
     </div>
   );

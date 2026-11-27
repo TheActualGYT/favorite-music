@@ -457,8 +457,8 @@
 .row > .hero-clip {
   right: 0;
   width: 48%;
-  background: transparent;
-  container-type: inline-size;
+  background: #111;
+  container-type: size;
 }
 
 .row > .hero-clip .clip-slot iframe,
@@ -1232,6 +1232,7 @@
   pointer-events: none;
   isolation: isolate;
   background: #111;
+  container-type: size;
 }
 
 .clip-cover {
@@ -1256,13 +1257,14 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 118%;
-  height: 118%;
+  width: max(100cqw, calc(100cqh * 16 / 9));
+  height: max(100cqh, calc(100cqw * 9 / 16));
   border: 0;
   pointer-events: none;
   max-width: none;
   object-fit: cover;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(1.5);
+  transform-origin: center;
 }
 
 .clip-slot {
