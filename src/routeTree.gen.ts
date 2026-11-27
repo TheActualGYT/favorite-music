@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiClipRouteImport } from './routes/api/clip'
 import { Route as ApiLibraryRouteImport } from './routes/api/library'
 import { Route as ApiThumbRouteImport } from './routes/api/thumb'
+import { Route as ApiTrackRouteImport } from './routes/api/track'
 import { Route as ApiTranslateRouteImport } from './routes/api/translate'
 
 const IndexRoute = IndexRouteImport.update({
@@ -35,6 +36,11 @@ const ApiThumbRoute = ApiThumbRouteImport.update({
   path: '/api/thumb',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiTrackRoute = ApiTrackRouteImport.update({
+  id: '/api/track',
+  path: '/api/track',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiTranslateRoute = ApiTranslateRouteImport.update({
   id: '/api/translate',
   path: '/api/translate',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/api/clip': typeof ApiClipRoute
   '/api/library': typeof ApiLibraryRoute
   '/api/thumb': typeof ApiThumbRoute
+  '/api/track': typeof ApiTrackRoute
   '/api/translate': typeof ApiTranslateRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/api/clip': typeof ApiClipRoute
   '/api/library': typeof ApiLibraryRoute
   '/api/thumb': typeof ApiThumbRoute
+  '/api/track': typeof ApiTrackRoute
   '/api/translate': typeof ApiTranslateRoute
 }
 export interface FileRoutesById {
@@ -61,20 +69,33 @@ export interface FileRoutesById {
   '/api/clip': typeof ApiClipRoute
   '/api/library': typeof ApiLibraryRoute
   '/api/thumb': typeof ApiThumbRoute
+  '/api/track': typeof ApiTrackRoute
   '/api/translate': typeof ApiTranslateRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/api/clip' | '/api/library' | '/api/thumb' | '/api/translate'
+    | '/'
+    | '/api/clip'
+    | '/api/library'
+    | '/api/thumb'
+    | '/api/track'
+    | '/api/translate'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/clip' | '/api/library' | '/api/thumb' | '/api/translate'
+  to:
+    | '/'
+    | '/api/clip'
+    | '/api/library'
+    | '/api/thumb'
+    | '/api/track'
+    | '/api/translate'
   id:
     | '__root__'
     | '/'
     | '/api/clip'
     | '/api/library'
     | '/api/thumb'
+    | '/api/track'
     | '/api/translate'
   fileRoutesById: FileRoutesById
 }
@@ -83,6 +104,7 @@ export interface RootRouteChildren {
   ApiClipRoute: typeof ApiClipRoute
   ApiLibraryRoute: typeof ApiLibraryRoute
   ApiThumbRoute: typeof ApiThumbRoute
+  ApiTrackRoute: typeof ApiTrackRoute
   ApiTranslateRoute: typeof ApiTranslateRoute
 }
 
@@ -116,6 +138,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiThumbRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/track': {
+      id: '/api/track'
+      path: '/api/track'
+      fullPath: '/api/track'
+      preLoaderRoute: typeof ApiTrackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/translate': {
       id: '/api/translate'
       path: '/api/translate'
@@ -131,6 +160,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiClipRoute: ApiClipRoute,
   ApiLibraryRoute: ApiLibraryRoute,
   ApiThumbRoute: ApiThumbRoute,
+  ApiTrackRoute: ApiTrackRoute,
   ApiTranslateRoute: ApiTranslateRoute,
 }
 export const routeTree = rootRouteImport

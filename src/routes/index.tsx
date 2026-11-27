@@ -227,58 +227,17 @@ type TrackInfo = {
 };
 
 async function fetchTrack(title: string, artist: string, album = ""): Promise<TrackInfo | null> {
-  const queries = [`${title} ${artist}`, album ? `${album} ${artist}` : "", title].filter(Boolean);
-  for (const term of queries) {
-    try {
-      const res = await fetch(
-        `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=8`,
-      );
-      if (!res.ok) continue;
-      const data = (await res.json()) as {
-        results?: {
-          trackName?: string;
-          artistName?: string;
-          collectionName?: string;
-          releaseDate?: string;
-          artworkUrl100?: string;
-          trackTimeMillis?: number;
-        }[];
-      };
-      const results = data.results ?? [];
-      const plain = (value: string) => value.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
-      const titleKey = plain(title);
-      const artistKey = plain(artist);
-      const hits = results.filter((item) => {
-        const track = plain(item.trackName || "");
-        const by = plain(item.artistName || "");
-        const titleOk = track === titleKey || track.startsWith(titleKey) || titleKey.startsWith(track);
-        const artistOk = !artistKey || artistKey.length < 2 || by.includes(artistKey) || artistKey.includes(by);
-        return titleOk && artistOk;
-      });
-      const match =
-        hits.find((item) => plain(item.trackName || "") === titleKey && !/english ver/i.test(item.trackName || "")) ??
-        hits[0];
-      if (!match) {
-        const loose = results.find((item) => plain(item.trackName || "").includes(titleKey));
-        if (!loose) continue;
-        return {
-          album: (loose.collectionName ?? album).replace(/\s*[-–]\s*single$/i, "").trim(),
-          releaseDate: loose.releaseDate?.slice(0, 10) ?? "",
-          coverUrl: loose.artworkUrl100?.replace("100x100bb", "600x600bb"),
-          durationMs: loose.trackTimeMillis,
-        };
-      }
-      return {
-        album: (match.collectionName ?? album).replace(/\s*[-–]\s*single$/i, "").trim(),
-        releaseDate: match.releaseDate?.slice(0, 10) ?? "",
-        coverUrl: match.artworkUrl100?.replace("100x100bb", "600x600bb"),
-        durationMs: match.trackTimeMillis,
-      };
-    } catch {
-      // try the next query
-    }
+  const params = new URLSearchParams({ title, artist });
+  if (album) params.set("album", album);
+  try {
+    const res = await fetch(`/api/track?${params}`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as TrackInfo | null;
+    if (!data || (!data.album && !data.coverUrl && !data.durationMs)) return null;
+    return data;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 async function fetchVideo(title: string, artist: string): Promise<string | null> {
