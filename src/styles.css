@@ -1232,15 +1232,15 @@
   pointer-events: none;
   isolation: isolate;
   background: transparent;
-  -webkit-mask-image: linear-gradient(to left, #000 26%, transparent 100%);
-  mask-image: linear-gradient(to left, #000 26%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to left, #000 78%, transparent 100%);
+  mask-image: linear-gradient(to left, #000 78%, transparent 100%);
 }
 
 .clip-cover {
   position: absolute;
   inset: 0;
   z-index: 30;
-  background: #141414;
+  background: transparent;
   opacity: 1;
   transition: opacity 0.55s linear;
 }
@@ -1278,6 +1278,11 @@
   max-width: none;
 }
 
+.detail-hero .hero-clip {
+  width: 62%;
+  -webkit-mask-image: linear-gradient(to left, #000 68%, transparent 100%);
+  mask-image: linear-gradient(to left, #000 68%, transparent 100%);
+}
 .detail-hero .edit-btn,
 .detail-copy,
 .detail-cover { position: relative; z-index: 1; }
