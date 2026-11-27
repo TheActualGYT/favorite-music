@@ -421,7 +421,7 @@
   margin-bottom: 0.55rem;
   border: 1px solid #3c3c3c;
   border-radius: 0.65rem;
-  padding: 0.5rem 0.7rem 0.5rem 0.15rem;
+  padding: 0.5rem 0.7rem 0.5rem 0.55rem;
   background: #3a3a3a;
   color: inherit;
   font: inherit;
@@ -476,7 +476,7 @@
 .rank {
   display: flex;
   box-sizing: border-box;
-  width: calc(2.6rem + (var(--rank-digits, 1) - 1) * 1.15rem);
+  width: calc(3.1rem + (var(--rank-digits, 1) - 1) * 1.15rem);
   flex: none;
   align-items: center;
   justify-content: center;

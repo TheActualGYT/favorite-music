@@ -258,7 +258,16 @@ async function fetchTrack(title: string, artist: string, album = ""): Promise<Tr
       const match =
         hits.find((item) => plain(item.trackName || "") === titleKey && !/english ver/i.test(item.trackName || "")) ??
         hits[0];
-      if (!match) continue;
+      if (!match) {
+        const loose = results.find((item) => plain(item.trackName || "").includes(titleKey));
+        if (!loose) continue;
+        return {
+          album: (loose.collectionName ?? album).replace(/\s*[-–]\s*single$/i, "").trim(),
+          releaseDate: loose.releaseDate?.slice(0, 10) ?? "",
+          coverUrl: loose.artworkUrl100?.replace("100x100bb", "600x600bb"),
+          durationMs: loose.trackTimeMillis,
+        };
+      }
       return {
         album: (match.collectionName ?? album).replace(/\s*[-–]\s*single$/i, "").trim(),
         releaseDate: match.releaseDate?.slice(0, 10) ?? "",
