@@ -1231,9 +1231,7 @@
   overflow: hidden;
   pointer-events: none;
   isolation: isolate;
-  background: transparent;
-  -webkit-mask-image: linear-gradient(to left, #000 78%, transparent 100%);
-  mask-image: linear-gradient(to left, #000 78%, transparent 100%);
+  background: #111;
 }
 
 .clip-cover {
@@ -1253,10 +1251,18 @@
   transition: none;
 }
 
+.clip-slot iframe,
 .clip-cover img {
   position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 118%;
+  height: 118%;
+  border: 0;
+  pointer-events: none;
   max-width: none;
   object-fit: cover;
+  transform: translate(-50%, -50%);
 }
 
 .clip-slot {
@@ -1279,9 +1285,7 @@
 }
 
 .detail-hero .hero-clip {
-  width: 62%;
-  -webkit-mask-image: linear-gradient(to left, #000 68%, transparent 100%);
-  mask-image: linear-gradient(to left, #000 68%, transparent 100%);
+  width: 54%;
 }
 .detail-hero .edit-btn,
 .detail-copy,

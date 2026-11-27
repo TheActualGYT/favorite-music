@@ -1080,15 +1080,17 @@ async function videoFit(videoId: string): Promise<VideoFit> {
 
 function placed(frame: VideoFrame, ratio: number, rect: DOMRect, lockRatio: number): CSSProperties {
   if (rect.width < 2 || rect.height < 2) return {};
-  const width = Math.max(rect.width / frame.width, (rect.height * lockRatio) / frame.height) * 1.04;
+  const width = Math.max(rect.width / frame.width, (rect.height * lockRatio) / frame.height) * 1.08;
   const height = width / lockRatio;
   const centerX = (frame.left + frame.width / 2) * width;
   const centerY = (frame.top + frame.height / 2) * height;
+  const left = rect.width / 2 - centerX;
+  const top = rect.height / 2 - centerY;
   return {
     width,
     height,
-    left: rect.width / 2 - centerX,
-    top: rect.height / 2 - centerY,
+    left: Math.min(left, 0),
+    top: Math.min(top, 0),
     transform: "none",
   };
 }
