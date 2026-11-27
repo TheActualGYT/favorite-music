@@ -987,20 +987,20 @@ function primaryArtist(artist: string) {
 }
 
 type VideoFrame = { left: number; top: number; width: number; height: number };
-const videoFrames = new Map<string, VideoFrame>();
+type VideoFit = { poster: string; image: VideoFrame; ratio: number };
+const videoFits = new Map<string, VideoFit>();
 
 function loadFrameImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error("image"));
     img.src = src;
   });
 }
 
-function measureFrame(img: HTMLImageElement): VideoFrame {
-  const width = 160;
+function measureImage(img: HTMLImageElement): VideoFrame {
+  const width = 180;
   const height = Math.max(1, Math.round((img.naturalHeight / img.naturalWidth) * width));
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -1009,21 +1009,19 @@ function measureFrame(img: HTMLImageElement): VideoFrame {
   if (!ctx) return { left: 0, top: 0, width: 1, height: 1 };
   ctx.drawImage(img, 0, 0, width, height);
   const pixels = ctx.getImageData(0, 0, width, height).data;
+  const dark = (x: number, y: number) => {
+    const i = (y * width + x) * 4;
+    return pixels[i] < 30 && pixels[i + 1] < 30 && pixels[i + 2] < 30;
+  };
   const barRow = (y: number) => {
-    let dark = 0;
-    for (let x = 0; x < width; x += 1) {
-      const i = (y * width + x) * 4;
-      if (pixels[i] < 16 && pixels[i + 1] < 16 && pixels[i + 2] < 16) dark += 1;
-    }
-    return dark / width > 0.97;
+    let count = 0;
+    for (let x = 0; x < width; x += 1) if (dark(x, y)) count += 1;
+    return count / width > 0.96;
   };
   const barCol = (x: number) => {
-    let dark = 0;
-    for (let y = 0; y < height; y += 1) {
-      const i = (y * width + x) * 4;
-      if (pixels[i] < 16 && pixels[i + 1] < 16 && pixels[i + 2] < 16) dark += 1;
-    }
-    return dark / height > 0.97;
+    let count = 0;
+    for (let y = 0; y < height; y += 1) if (dark(x, y)) count += 1;
+    return count / height > 0.96;
   };
   let top = 0;
   let bottom = height - 1;
@@ -1033,26 +1031,14 @@ function measureFrame(img: HTMLImageElement): VideoFrame {
   while (bottom > top && barRow(bottom)) bottom -= 1;
   while (left < right && barCol(left)) left += 1;
   while (right > left && barCol(right)) right -= 1;
-  const imageRatio = img.naturalWidth / img.naturalHeight;
-  const contentRatio = ((right - left + 1) / width) / ((bottom - top + 1) / height) * imageRatio;
-  const player = 16 / 9;
-  let frame: VideoFrame;
-  if (Math.abs(imageRatio - player) < 0.08) {
-    frame = {
-      left: left / width,
-      top: top / height,
-      width: (right - left + 1) / width,
-      height: (bottom - top + 1) / height,
-    };
-  } else if (contentRatio < player) {
-    const box = contentRatio / player;
-    frame = { left: (1 - box) / 2, top: 0, width: box, height: 1 };
-  } else {
-    const box = player / contentRatio;
-    frame = { left: 0, top: (1 - box) / 2, width: 1, height: box };
-  }
-  if (frame.width < 0.35 || frame.height < 0.35) return { left: 0, top: 0, width: 1, height: 1 };
-  const inset = 0.012;
+  const frame = {
+    left: left / width,
+    top: top / height,
+    width: (right - left + 1) / width,
+    height: (bottom - top + 1) / height,
+  };
+  if (frame.width < 0.34 || frame.height < 0.34) return { left: 0, top: 0, width: 1, height: 1 };
+  const inset = 0.01;
   return {
     left: frame.left + frame.width * inset,
     top: frame.top + frame.height * inset,
@@ -1061,36 +1047,41 @@ function measureFrame(img: HTMLImageElement): VideoFrame {
   };
 }
 
-async function videoFrame(videoId: string) {
-  const cached = videoFrames.get(videoId);
-  if (cached) return cached;
-  const sources = [
-    `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
-    `https://i.ytimg.com/vi/${videoId}/hq720.jpg`,
-    `https://i.ytimg.com/vi/${videoId}/sddefault.jpg`,
-  ];
-  for (const src of sources) {
-    try {
-      const img = await loadFrameImage(src);
-      if (img.naturalWidth < 200) continue;
-      const ratio = img.naturalWidth / img.naturalHeight;
-      if (Math.abs(ratio - 4 / 3) < 0.05) continue;
-      const frame = measureFrame(img);
-      videoFrames.set(videoId, frame);
-      return frame;
-    } catch {
-      // try the next thumbnail
-    }
+function playerFrame(image: VideoFrame, ratio: number): VideoFrame {
+  const player = 16 / 9;
+  const contentRatio = (image.width / image.height) * ratio;
+  if (Math.abs(ratio - player) < 0.07) return image;
+  if (contentRatio < player) {
+    const width = contentRatio / player;
+    return { left: (1 - width) / 2, top: 0, width, height: 1 };
   }
-  const frame = { left: 0, top: 0, width: 1, height: 1 };
-  videoFrames.set(videoId, frame);
-  return frame;
+  const height = player / contentRatio;
+  return { left: 0, top: (1 - height) / 2, width: 1, height };
 }
 
-function frameStyle(frame: VideoFrame, rect: DOMRect): CSSProperties {
+async function videoFit(videoId: string): Promise<VideoFit> {
+  const cached = videoFits.get(videoId);
+  if (cached) return cached;
+  const poster = `/api/thumb?v=${videoId}`;
+  try {
+    const img = await loadFrameImage(poster);
+    if (img.naturalWidth >= 200) {
+      const fit = { poster, image: measureImage(img), ratio: img.naturalWidth / img.naturalHeight };
+      videoFits.set(videoId, fit);
+      return fit;
+    }
+  } catch {
+    // keep the uncropped player
+  }
+  const fit = { poster, image: { left: 0, top: 0, width: 1, height: 1 }, ratio: 16 / 9 };
+  videoFits.set(videoId, fit);
+  return fit;
+}
+
+function placed(frame: VideoFrame, ratio: number, rect: DOMRect, lockRatio: number): CSSProperties {
   if (rect.width < 2 || rect.height < 2) return {};
-  const width = Math.max(rect.width / frame.width, (rect.height * 16) / (9 * frame.height));
-  const height = (width * 9) / 16;
+  const width = Math.max(rect.width / frame.width, (rect.height * lockRatio) / frame.height);
+  const height = width / lockRatio;
   const centerX = (frame.left + frame.width / 2) * width;
   const centerY = (frame.top + frame.height / 2) * height;
   return {
@@ -1122,7 +1113,6 @@ function embedSrc(videoId: string, from: number, to: number) {
 }
 
 function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; start?: number; scope?: string }) {
-  const poster = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
   const playFrom = Math.max(0, start - 4);
   const clipEnd = start + 24;
   const box = useRef<HTMLDivElement>(null);
@@ -1130,7 +1120,9 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
   const [covered, setCovered] = useState(true);
   const [instant, setInstant] = useState(false);
   const [active, setActive] = useState(0);
-  const [fit, setFit] = useState<CSSProperties>({});
+  const [poster, setPoster] = useState(`/api/thumb?v=${videoId}`);
+  const [posterFit, setPosterFit] = useState<CSSProperties>({});
+  const [playerFit, setPlayerFit] = useState<CSSProperties>({});
   const [srcs, setSrcs] = useState<[string, string]>([`${embedSrc(videoId, playFrom, clipEnd)}&r=1`, ""]);
   useEffect(() => {
     let dead = false;
@@ -1249,17 +1241,19 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
     const node = box.current;
     if (!node) return;
     let dead = false;
-    let frame: VideoFrame = { left: 0, top: 0, width: 1, height: 1 };
+    let fit: VideoFit = { poster: `/api/thumb?v=${videoId}`, image: { left: 0, top: 0, width: 1, height: 1 }, ratio: 16 / 9 };
     const apply = () => {
       const rect = node.getBoundingClientRect();
-      setFit(frameStyle(frame, rect));
+      setPoster(fit.poster);
+      setPosterFit(placed(fit.image, fit.ratio, rect, fit.ratio));
+      setPlayerFit(placed(playerFrame(fit.image, fit.ratio), 16 / 9, rect, 16 / 9));
     };
     apply();
     const observer = new ResizeObserver(apply);
     observer.observe(node);
-    videoFrame(videoId).then((next) => {
+    videoFit(videoId).then((next) => {
       if (dead) return;
-      frame = next;
+      fit = next;
       apply();
     });
     return () => {
@@ -1277,7 +1271,7 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
               ref={frames[index]}
               src={srcs[index]}
               title=""
-              style={fit}
+              style={playerFit}
               allow="autoplay; encrypted-media"
               tabIndex={-1}
             />
@@ -1285,7 +1279,7 @@ function HeroClip({ videoId, start = 15, scope = "hero" }: { videoId: string; st
         </div>
       ))}
       <div className={covered ? `clip-cover${instant ? " is-instant" : ""}` : "clip-cover is-off"}>
-        <img src={poster} alt="" style={fit} />
+        <img src={poster} alt="" style={posterFit} />
       </div>
     </div>
   );

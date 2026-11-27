@@ -465,7 +465,6 @@
 .row > .hero-clip .clip-cover img {
   position: absolute;
   max-width: none;
-  object-fit: fill;
 }
 
 .rank {
@@ -1256,8 +1255,8 @@
 
 .clip-cover img {
   position: absolute;
-  object-fit: fill;
   max-width: none;
+  object-fit: cover;
 }
 
 .clip-slot {
